@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -18,8 +20,9 @@ const DETECT_R = 130
 
 const ALIASES = ['The Marshmallow Bandit', 'Sergeant Sasquatch', 'The Bug Juice Outlaw', 'Captain Campfire', 'Doc Poison Ivy']
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { x: W / 2, y: H / 2 },
     bounties: ALIASES.slice(0, 4).map((name) => ({
       name,
@@ -29,7 +32,7 @@ function freshState() {
       wanderDir: { x: rand(-1, 1), y: rand(-1, 1) },
     })),
     particles: [],
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -38,7 +41,8 @@ export default function BountyHuntersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [caught, setCaught] = useState(0)
@@ -47,9 +51,10 @@ export default function BountyHuntersGame() {
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
     setCaught(0)
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -75,15 +80,15 @@ export default function BountyHuntersGame() {
         const b = s.bounties[i]
         const d = dist(b, s.player)
         if (d < DETECT_R) {
-          steer(b, s.player, BOUNTY_SPEED, true)
+          steer(b, s.player, BOUNTY_SPEED * s.mult.speed, true)
         } else {
           b.wanderT -= dt
           if (b.wanderT <= 0) {
             b.wanderDir = { x: rand(-1, 1), y: rand(-1, 1) }
             b.wanderT = rand(1, 2.5)
           }
-          b.vx = b.wanderDir.x * BOUNTY_SPEED * 0.35
-          b.vy = b.wanderDir.y * BOUNTY_SPEED * 0.35
+          b.vx = b.wanderDir.x * BOUNTY_SPEED * s.mult.speed * 0.35
+          b.vy = b.wanderDir.y * BOUNTY_SPEED * s.mult.speed * 0.35
         }
         b.x = clamp(b.x + (b.vx ?? 0) * dt, 20, W - 20)
         b.y = clamp(b.y + (b.vy ?? 0) * dt, 20, H - 20)
@@ -150,7 +155,9 @@ export default function BountyHuntersGame() {
           subtitle="Track down every hiding bounty and tag them before time's up — they'll bolt the moment they spot you coming. WASD/arrows or joystick to move."
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🏆"

@@ -4,6 +4,7 @@ import { getTheme } from '../lib/theme.js'
 import ToolTabs from '../components/tools/ToolTabs.jsx'
 import AdSlot from '../components/AdSlot.jsx'
 import GameCard from '../components/GameCard.jsx'
+import ShareButton from '../components/ShareButton.jsx'
 import { PLAYABLE_GAMES } from '../games/index.js'
 
 export default function GameDetail() {
@@ -25,15 +26,18 @@ export default function GameDetail() {
           ← All games
         </Link>
 
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border ${t.border} ${t.bg} text-4xl`}>
-            {game.emoji}
-          </span>
-          <div>
-            <span className={`chip ${t.text}`}>{game.category}</span>
-            <h1 className="section-heading mt-1 text-3xl sm:text-4xl">{game.name}</h1>
-            <p className="mt-1 max-w-2xl text-sm text-forest-300/70">{game.tagline}</p>
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border ${t.border} ${t.bg} text-4xl`}>
+              {game.emoji}
+            </span>
+            <div>
+              <span className={`chip ${t.text}`}>{game.category}</span>
+              <h1 className="section-heading mt-1 text-3xl sm:text-4xl">{game.name}</h1>
+              <p className="mt-1 max-w-2xl text-sm text-forest-300/70">{game.tagline}</p>
+            </div>
           </div>
+          <ShareButton gameName={game.name} className="self-start sm:self-center" />
         </div>
 
         <div className="mt-6">
@@ -94,15 +98,18 @@ export default function GameDetail() {
       </Link>
 
       {/* Header */}
-      <div className="mt-4 flex flex-col gap-6 sm:flex-row sm:items-center">
-        <span className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl border ${t.border} ${t.bg} text-6xl`}>
-          {game.emoji}
-        </span>
-        <div>
-          <span className={`chip ${t.text}`}>{game.category}</span>
-          <h1 className="section-heading mt-2 text-4xl sm:text-5xl">{game.name}</h1>
-          <p className="mt-2 max-w-2xl text-forest-300/70">{game.tagline}</p>
+      <div className="mt-4 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <span className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl border ${t.border} ${t.bg} text-6xl`}>
+            {game.emoji}
+          </span>
+          <div>
+            <span className={`chip ${t.text}`}>{game.category}</span>
+            <h1 className="section-heading mt-2 text-4xl sm:text-5xl">{game.name}</h1>
+            <p className="mt-2 max-w-2xl text-forest-300/70">{game.tagline}</p>
+          </div>
         </div>
+        <ShareButton gameName={game.name} className="self-start sm:self-center" />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">

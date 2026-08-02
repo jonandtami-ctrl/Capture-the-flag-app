@@ -9,7 +9,7 @@ export default function Privacy() {
         <section>
           <h2 className="font-display text-xl text-white">What we collect</h2>
           <p className="mt-2">
-            Basecamp Games doesn't require an account and doesn't run its own backend or
+            CampHQ doesn't require an account and doesn't run its own backend or
             database. Any information you enter — player names, team rosters, scores — is
             stored only in your browser's local storage, on your own device. We never see it,
             and it never leaves your device unless you clear it or your browser does.
@@ -38,7 +38,7 @@ export default function Privacy() {
         <section>
           <h2 className="font-display text-xl text-white">Children's privacy</h2>
           <p className="mt-2">
-            Basecamp Games is intended for use by camp staff, counselors, and organizers. We
+            CampHQ is intended for use by camp staff, counselors, and organizers. We
             do not knowingly collect personal information from children, and since the app
             stores data only locally on the device in use, no player data is transmitted to
             us in the first place.

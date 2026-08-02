@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -15,8 +17,9 @@ const PLAYER_SPEED = 230
 const SAFE_SPEED = 60
 const ROUND_SECONDS = 60
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { id: 'player', x: W / 2, y: H - 140, vx: 0, vy: 0, hitCd: 0 },
     bots: [
       { id: 'b1', x: W / 2 - 160, y: H / 2, vx: 0, vy: 0, hitCd: 0, think: 0 },
@@ -28,7 +31,7 @@ function freshState() {
     grace: 0,
     stallT: 0,
     particles: [],
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -44,7 +47,8 @@ export default function GagaBallGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [botsLeft, setBotsLeft] = useState(3)
@@ -52,9 +56,10 @@ export default function GagaBallGame() {
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
     setBotsLeft(3)
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -95,7 +100,7 @@ export default function GagaBallGame() {
 
       // bots: chase the ball
       for (const bot of s.bots) {
-        steer(bot, s.ball, 150)
+        steer(bot, s.ball, 150 * s.mult.speed)
         bot.x += bot.vx * dt
         bot.y += bot.vy * dt
         bounceInPit(bot)
@@ -181,7 +186,9 @@ export default function GagaBallGame() {
           subtitle="Move into the ball to swat it toward an opponent. If the ball you didn't just hit touches you, you're out. Last one standing wins!"
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🏆"

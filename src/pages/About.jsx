@@ -7,7 +7,7 @@ export default function About() {
       <h1 className="section-heading mt-4">Camp games you can actually play right now</h1>
       <div className="mt-6 space-y-4 text-forest-200/80">
         <p>
-          Basecamp Games takes the most requested camp games — Capture the Flag, Flame
+          CampHQ takes the most requested camp games — Capture the Flag, Flame
           Battlers, Risk Takers, and more — and turns each one into a real playable
           browser game. Move a character, dodge an AI opponent, land the trick shot. No
           waiting around for enough people to show up.

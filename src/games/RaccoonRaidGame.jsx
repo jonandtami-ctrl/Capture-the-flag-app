@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -15,15 +17,16 @@ const STASH = { x: W / 2, y: 470 }
 const ROUND_SECONDS = 60
 const START_LIVES = 5
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { x: W / 2 },
     raccoons: [],
     shots: [],
     particles: [],
     spawnCd: 1,
     elapsed: 0,
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -32,7 +35,8 @@ export default function RaccoonRaidGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection, actionRef } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
   const firedRef = useRef(false)
 
   const [phase, setPhase] = useState('ready')
@@ -42,10 +46,11 @@ export default function RaccoonRaidGame() {
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
     setLives(START_LIVES)
     setScore(0)
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -80,11 +85,11 @@ export default function RaccoonRaidGame() {
       s.spawnCd -= dt
       if (s.spawnCd <= 0) {
         const difficulty = clamp(s.elapsed / ROUND_SECONDS, 0, 1)
-        s.spawnCd = rand(1.3 - difficulty * 0.8, 2.2 - difficulty * 0.9)
+        s.spawnCd = (rand(1.3 - difficulty * 0.8, 2.2 - difficulty * 0.9)) / s.mult.speed
         s.raccoons.push({
           x: rand(50, W - 50),
           y: -20,
-          speed: rand(70, 110) + difficulty * 70,
+          speed: (rand(70, 110) + difficulty * 70) * s.mult.speed,
           wobble: rand(0, Math.PI * 2),
           alive: true,
         })
@@ -169,7 +174,9 @@ export default function RaccoonRaidGame() {
           subtitle="Move left/right with A/D or arrows, then press Space or tap/click to fire your slingshot straight up. Don't let the raccoons reach the food stash!"
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🏆"

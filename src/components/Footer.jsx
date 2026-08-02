@@ -11,7 +11,7 @@ export default function Footer() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-2xl">🏕️</span>
-              <span className="font-display text-lg text-white">Basecamp Games</span>
+              <span className="font-display text-lg text-white">CampHQ</span>
             </div>
             <p className="mt-2 max-w-xs text-sm text-forest-300/60">
               Team randomizers, timers, and scoreboards for the camp games everyone
@@ -24,7 +24,7 @@ export default function Footer() {
               Explore
             </h4>
             <ul className="space-y-2 text-sm text-forest-300/70">
-              <li><Link to="/games" className="hover:text-forest-100">All Games</Link></li>
+              <li><Link to="/games" className="hover:text-forest-100">Program Central</Link></li>
               <li><Link to="/tools" className="hover:text-forest-100">Standalone Tools</Link></li>
               <li><Link to="/about" className="hover:text-forest-100">About</Link></li>
             </ul>
@@ -43,7 +43,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 text-xs text-forest-300/40 sm:flex-row">
-          <span>© {new Date().getFullYear()} Basecamp Games. Built for camps, scouts, and backyard rivalries.</span>
+          <span>© {new Date().getFullYear()} CampHQ. Built for camps, scouts, and backyard rivalries.</span>
           <div className="flex items-center gap-4">
             <Link to="/privacy" className="hover:text-forest-200">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-forest-200">Terms & Disclaimer</Link>

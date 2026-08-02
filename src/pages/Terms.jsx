@@ -9,7 +9,7 @@ export default function Terms() {
         <section>
           <h2 className="font-display text-xl text-white">Just a toolkit</h2>
           <p className="mt-2">
-            Basecamp Games provides game rules, suggestions, and companion tools (team
+            CampHQ provides game rules, suggestions, and companion tools (team
             randomizer, timer, scoreboard, market simulator) for entertainment and
             organizational purposes only. We don't supervise your game, and we're not
             responsible for how it's run.
@@ -50,7 +50,7 @@ export default function Terms() {
         <section>
           <h2 className="font-display text-xl text-white">Limitation of liability</h2>
           <p className="mt-2">
-            To the fullest extent permitted by law, Basecamp Games and its creators are not
+            To the fullest extent permitted by law, CampHQ and its creators are not
             liable for any injury, loss, or damage arising from your use of this site or
             participation in any game described here.
           </p>

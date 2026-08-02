@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import useSound from '../lib/useSound.js'
+import useRank from '../lib/useRank.js'
+import RankSelector from './engine/RankSelector.jsx'
 
 const OPPONENTS = ['Riley', 'Coach Marcus', 'Big Tone', 'Sam "Lightning"', 'The Reigning Champ']
 
@@ -8,6 +10,7 @@ export default function KingOfCourtGame() {
   const [wins, setWins] = useState(0)
   const [opponentIdx, setOpponentIdx] = useState(0)
   const [result, setResult] = useState(null)
+  const [rank, setRank, ranks] = useRank()
   const timeoutRef = useRef(null)
   const goAtRef = useRef(0)
   const resolvedRef = useRef(false)
@@ -41,7 +44,7 @@ export default function KingOfCourtGame() {
     resolvedRef.current = true
     const reactionMs = performance.now() - goAtRef.current
     const difficulty = Math.min(wins, 4)
-    const aiReactionMs = 260 - difficulty * 25 + Math.random() * 120
+    const aiReactionMs = (260 - difficulty * 25 + Math.random() * 120) / rank.speedMult
     const win = reactionMs < aiReactionMs
     setResult({ win, reactionMs: Math.round(reactionMs), aiReactionMs: Math.round(aiReactionMs) })
     setPhase('result')
@@ -84,6 +87,7 @@ export default function KingOfCourtGame() {
             <p className="mt-2 max-w-sm text-sm text-forest-200/70">
               Wait for "GO!" then swing as fast as you can. Swing too early and it's a false start.
             </p>
+            {wins === 0 && <RankSelector ranks={ranks} value={rank} onChange={setRank} />}
             <button onClick={startDuel} className="btn-primary mt-5">
               Ready up
             </button>

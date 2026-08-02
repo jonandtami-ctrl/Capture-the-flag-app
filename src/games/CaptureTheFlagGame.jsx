@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, dist, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -16,8 +18,9 @@ const PLAYER_R = 16
 const AI_R = 16
 const ROUND_SECONDS = 60
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { x: 90, y: H / 2, carrying: false, tagFlashT: 0 },
     home: { x: 60, y: H / 2 },
     enemyFlag: { x: W - 60, y: H / 2, taken: false },
@@ -27,7 +30,7 @@ function freshState() {
       { x: W - 260, y: H / 2, home: { x: W - 260, y: H / 2 }, mode: 'patrol', wait: 0 },
     ],
     particles: [],
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -36,7 +39,8 @@ export default function CaptureTheFlagGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready') // ready | playing | won | lost
   const [carrying, setCarrying] = useState(false)
@@ -44,9 +48,10 @@ export default function CaptureTheFlagGame() {
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
     setCarrying(false)
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -92,7 +97,7 @@ export default function CaptureTheFlagGame() {
         }
 
         if (d.mode === 'chase') {
-          steer(d, s.player, AI_SPEED)
+          steer(d, s.player, AI_SPEED * s.mult.speed)
         } else {
           if (!d.patrolTarget || dist(d, d.patrolTarget) < 6) {
             d.wait -= dt
@@ -104,7 +109,7 @@ export default function CaptureTheFlagGame() {
               d.wait = 1.5
             }
           }
-          if (d.patrolTarget) steer(d, d.patrolTarget, AI_SPEED * 0.5)
+          if (d.patrolTarget) steer(d, d.patrolTarget, AI_SPEED * s.mult.speed * 0.5)
         }
         d.x = clamp(d.x + d.vx * dt, W / 2 - 30, W - AI_R)
         d.y = clamp(d.y + d.vy * dt, AI_R, H - AI_R)
@@ -181,7 +186,9 @@ export default function CaptureTheFlagGame() {
           subtitle="Sneak past the defenders (🥷), grab the enemy flag, and race it back to your side. WASD/arrows to move, or use the joystick on mobile."
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🏆"

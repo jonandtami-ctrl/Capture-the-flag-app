@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -16,13 +18,14 @@ const PLAYER_SPEED = 200
 const ROUND_SECONDS = 45
 const CATCH_R = 46
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { x: START.x, y: START.y },
-    counselor: { watching: false, warn: false, t: rand(1.5, 2.5) },
+    counselor: { watching: false, warn: false, t: rand(1.5, 2.5) / mult.speed },
     particles: [],
     caughtFlash: 0,
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -31,15 +34,17 @@ export default function PrankWarsGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
-    setTimeLeft(ROUND_SECONDS)
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -66,11 +71,11 @@ export default function PrankWarsGame() {
         if (c.watching) {
           c.watching = false
           c.warn = false
-          c.t = rand(1.6, 3)
+          c.t = rand(1.6, 3) / s.mult.speed
         } else {
           c.watching = true
           c.warn = false
-          c.t = rand(1.2, 2.2)
+          c.t = rand(1.2, 2.2) * s.mult.speed
         }
       }
 
@@ -145,7 +150,9 @@ export default function PrankWarsGame() {
           subtitle="Sneak up on the counselor without being seen moving. Watch for the 👀 warning before they turn around — freeze until they look away again."
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🎉"

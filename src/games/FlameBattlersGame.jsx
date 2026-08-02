@@ -6,6 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
+import RankSelector from './engine/RankSelector.jsx'
+import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
 const W = 800
@@ -14,16 +16,17 @@ const SPEED = 220
 const ROUND_SECONDS = 75
 const START_HEALTH = 5
 
-function freshState() {
+function freshState(mult) {
   return {
+    mult,
     player: { x: 130, y: H / 2 },
-    ai: { x: W - 130, y: H / 2, vy: rand(-60, 60), throwCd: rand(0.8, 1.6) },
+    ai: { x: W - 130, y: H / 2, vy: rand(-60, 60), throwCd: rand(0.8, 1.6) / mult.speed },
     playerFlame: { x: 60, y: H / 2, health: START_HEALTH },
     aiFlame: { x: W - 60, y: H / 2, health: START_HEALTH },
     balloons: [], // {x,y,tx,ty,speed,from:'player'|'ai'}
     telegraphs: [], // {x,y,t}
     particles: [],
-    timeLeft: ROUND_SECONDS,
+    timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
 
@@ -32,8 +35,8 @@ export default function FlameBattlersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const stateRef = useRef(freshState())
-  const pointerTarget = useRef(null)
+  const [rank, setRank, ranks] = useRank()
+  const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [hp, setHp] = useState({ player: START_HEALTH, ai: START_HEALTH })
@@ -41,9 +44,10 @@ export default function FlameBattlersGame() {
   const hudAccum = useRef(0)
 
   const start = () => {
-    stateRef.current = freshState()
+    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    stateRef.current = freshState(mult)
     setHp({ player: START_HEALTH, ai: START_HEALTH })
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
 
@@ -97,7 +101,7 @@ export default function FlameBattlersGame() {
       // AI throw cadence with telegraph
       s.ai.throwCd -= dt
       if (s.ai.throwCd <= 0) {
-        s.ai.throwCd = rand(1.2, 2.2)
+        s.ai.throwCd = rand(1.2, 2.2) / s.mult.speed
         const tx = s.playerFlame.x + rand(-14, 14)
         const ty = s.playerFlame.y + rand(-14, 14)
         s.telegraphs.push({ x: tx, y: ty, t: 0.45 })
@@ -220,7 +224,9 @@ export default function FlameBattlersGame() {
           subtitle="Move with WASD/joystick to dodge, and tap/click anywhere to throw a water balloon at the enemy flame. Watch for the AI's targeting reticle on your own flame — stand in front of it to block the hit!"
           buttonLabel="Start"
           onAction={start}
-        />
+        >
+          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
           emoji="🏆"

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { rand, randInt } from './engine/utils.js'
 import useSound from '../lib/useSound.js'
+import useRank from '../lib/useRank.js'
+import RankSelector from './engine/RankSelector.jsx'
 
 const TARGETS = [
   { id: 'key', emoji: '🔑', name: 'Lost key' },
@@ -11,12 +13,12 @@ const TARGETS = [
   { id: 'balloon', emoji: '🎈', name: 'Balloon' },
 ]
 const CLUTTER = ['🌲', '🍂', '🪨', '🍄', '🦋', '🐌', '🌼', '🪵', '🌿', '🍁', '🪺', '🌾']
-const CLUTTER_COUNT = 45
+const BASE_CLUTTER_COUNT = 45
 const ROUND_SECONDS = 45
 
-function buildScene() {
+function buildScene(clutterCount) {
   const items = []
-  for (let i = 0; i < CLUTTER_COUNT; i++) {
+  for (let i = 0; i < clutterCount; i++) {
     items.push({
       key: `c${i}`,
       emoji: CLUTTER[randInt(0, CLUTTER.length - 1)],
@@ -45,15 +47,18 @@ export default function ScavengerHuntGame() {
   const [scene, setScene] = useState([])
   const [found, setFound] = useState(new Set())
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rank, setRank, ranks] = useRank()
   const intervalRef = useRef(null)
   const sound = useSound()
 
   useEffect(() => () => clearInterval(intervalRef.current), [])
 
   const start = () => {
-    setScene(buildScene())
+    const roundSeconds = Math.round(ROUND_SECONDS * rank.timeMult)
+    const clutterCount = Math.round(BASE_CLUTTER_COUNT * rank.speedMult)
+    setScene(buildScene(clutterCount))
     setFound(new Set())
-    setTimeLeft(ROUND_SECONDS)
+    setTimeLeft(roundSeconds)
     setPhase('playing')
     clearInterval(intervalRef.current)
     intervalRef.current = setInterval(() => {
@@ -122,6 +127,7 @@ export default function ScavengerHuntGame() {
                   <p className="max-w-xs px-4 text-sm text-forest-200/70">
                     Find all 6 items hidden in the scene before time runs out.
                   </p>
+                  <RankSelector ranks={ranks} value={rank} onChange={setRank} />
                   <button onClick={start} className="btn-primary">
                     Start
                   </button>

@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 const links = [
   { to: '/', label: 'Home', end: true },
-  { to: '/games', label: 'Games' },
+  { to: '/games', label: 'Program Central' },
   { to: '/tools', label: 'Tools' },
   { to: '/about', label: 'About' },
 ]
@@ -17,7 +17,7 @@ export default function Navbar() {
         <NavLink to="/" className="group flex items-center gap-2" onClick={() => setOpen(false)}>
           <span className="text-2xl transition-transform group-hover:-rotate-12">🏕️</span>
           <span className="font-display text-xl text-white sm:text-2xl">
-            Basecamp <span className="text-ember-400">Games</span>
+            Camp<span className="text-ember-400">HQ</span>
           </span>
         </NavLink>
 
