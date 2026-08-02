@@ -37,10 +37,10 @@ function portfolioValue(team, assets) {
 
 export default function MarketGame() {
   const [phase, setPhase] = useState('setup')
-  const [teamNames, setTeamNames] = useState(['Team 1', 'Team 2'])
+  const [teamNames, setTeamNames] = useState(['You', 'Market Bot'])
   const [startingCash, setStartingCash] = useState(1000)
-  const [totalRounds, setTotalRounds] = useState(10)
-  const [roundSeconds, setRoundSeconds] = useState(90)
+  const [totalRounds, setTotalRounds] = useState(6)
+  const [roundSeconds, setRoundSeconds] = useState(20)
 
   const [teams, setTeams] = useState([])
   const [assets, setAssets] = useState(freshAssets())
@@ -109,10 +109,8 @@ export default function MarketGame() {
     setTrade((prev) => ({ ...prev, [teamId]: { ...prev[teamId], [field]: value } }))
   }
 
-  const buy = (teamId) => {
-    const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
+  const executeBuy = (teamId, assetId, quantity) => {
     const asset = assets.find((a) => a.id === assetId)
-    const quantity = Math.max(1, Number(qty))
     const cost = asset.price * quantity
     setTeams((prev) =>
       prev.map((t) => {
@@ -124,13 +122,10 @@ export default function MarketGame() {
         }
       }),
     )
-    sound.point()
   }
 
-  const sell = (teamId) => {
-    const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
+  const executeSell = (teamId, assetId, quantity) => {
     const asset = assets.find((a) => a.id === assetId)
-    const quantity = Math.max(1, Number(qty))
     setTeams((prev) =>
       prev.map((t) => {
         const held = t.holdings[assetId] ?? 0
@@ -142,8 +137,43 @@ export default function MarketGame() {
         }
       }),
     )
+  }
+
+  const buy = (teamId) => {
+    const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
+    executeBuy(teamId, assetId, Math.max(1, Number(qty)))
     sound.point()
   }
+
+  const sell = (teamId) => {
+    const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
+    executeSell(teamId, assetId, Math.max(1, Number(qty)))
+    sound.point()
+  }
+
+  // Bot teams (name contains "Bot") make a small random trade roughly every
+  // couple of seconds while a round is running, so single-player mode has
+  // something to compete against.
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => {
+      for (const team of teams) {
+        if (!team.name.toLowerCase().includes('bot')) continue
+        if (Math.random() > 0.6) continue
+        const asset = assets[Math.floor(Math.random() * assets.length)]
+        const wantsToBuy = Math.random() > 0.45
+        if (wantsToBuy) {
+          const qty = Math.max(1, Math.floor((team.cash * 0.2) / asset.price))
+          if (qty > 0) executeBuy(team.id, asset.id, qty)
+        } else {
+          const held = team.holdings[asset.id] ?? 0
+          if (held > 0) executeSell(team.id, asset.id, Math.max(1, Math.floor(held * 0.5)))
+        }
+      }
+    }, 1400)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, teams, assets])
 
   const resetGame = () => {
     setPhase('setup')

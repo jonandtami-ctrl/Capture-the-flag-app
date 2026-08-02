@@ -4,23 +4,27 @@ export default function About() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <span className="chip">About</span>
-      <h1 className="section-heading mt-4">Built to get everyone off the bench faster</h1>
+      <h1 className="section-heading mt-4">Camp games you can actually play right now</h1>
       <div className="mt-6 space-y-4 text-forest-200/80">
         <p>
-          Basecamp Games started as a simple problem: every camp counselor, coach, or
-          camp-out parent ends up doing the same three things by hand — splitting people
-          into fair teams, timing rounds, and keeping score on a scrap of paper.
+          Basecamp Games takes the most requested camp games — Capture the Flag, Flame
+          Battlers, Risk Takers, and more — and turns each one into a real playable
+          browser game. Move a character, dodge an AI opponent, land the trick shot. No
+          waiting around for enough people to show up.
         </p>
         <p>
-          This app bundles the rules for the most requested camp games — Capture the
-          Flag, Flame Battlers, Risk Takers, and more — with the exact tools you need to
-          run them: an instant team randomizer, a big glanceable countdown timer, and a
-          live scoreboard. No sign-up, no installs, no fumbling with a whistle and a
-          notepad.
+          Every game is single-player versus computer-controlled opponents, built to
+          finish in well under a minute so you can jump in for a quick round or chase a
+          high score for a while.
         </p>
         <p>
-          Everything runs entirely on your device — no backend, no accounts, and your
-          rosters are only ever stored locally in your browser.
+          Planning the real, physical version for an actual camp or backyard? Every game
+          page also includes companion tools — a team randomizer, timer, and
+          scoreboard — for running it in person.
+        </p>
+        <p>
+          Everything runs entirely in your browser — no backend, no accounts, no data
+          leaves your device.
         </p>
       </div>
       <Link to="/games" className="btn-primary mt-8 inline-flex">

@@ -5,19 +5,19 @@ import AdSlot from '../components/AdSlot.jsx'
 
 const FEATURES = [
   {
-    icon: '🎲',
-    title: 'Instant Team Randomizer',
-    desc: 'Drop in a roster and get fair, shuffled teams in one tap — no more picking sides.',
+    icon: '🎮',
+    title: 'Play in seconds',
+    desc: 'No install, no sign-up. Pick a game and you\'re moving a character within a click.',
   },
   {
-    icon: '⏱',
-    title: 'Built-in Timers',
-    desc: 'Big, glanceable countdowns with sound cues so you can referee from across the field.',
+    icon: '🤖',
+    title: 'You vs. the AI',
+    desc: 'Every game pits you against computer-controlled opponents — quick rounds, no waiting on other players.',
   },
   {
-    icon: '🏆',
-    title: 'Live Scoreboards',
-    desc: 'Track points per team in real time, crown the leader, and settle every argument.',
+    icon: '⚡',
+    title: 'Fast rounds',
+    desc: 'Most games wrap up in 45-90 seconds, so you can squeeze in a round (or five) whenever.',
   },
 ]
 
@@ -34,23 +34,23 @@ export default function Home() {
         </div>
 
         <div className="mx-auto max-w-4xl text-center">
-          <span className="chip mx-auto animate-floaty">🏕️ The camp game companion app</span>
+          <span className="chip mx-auto animate-floaty">🏕️ Camp games, playable right now</span>
           <h1 className="section-heading mt-5 text-5xl sm:text-6xl md:text-7xl">
             Every camp game.
             <br />
-            <span className="text-ember-400">One command center.</span>
+            <span className="text-ember-400">Playable right now.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-forest-200/70">
             Capture the Flag, Flame Battlers, Risk Takers, and the rest of the classics —
-            complete with rules, team randomizers, timers, and scoreboards. Just show up
-            and play.
+            reimagined as real browser games you play against the computer. No install,
+            no waiting for other players.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link to="/games" className="btn-primary text-base">
-              🚩 Browse Games
+            <Link to="/games/capture-the-flag" className="btn-primary text-base">
+              🚩 Play now
             </Link>
-            <Link to="/tools" className="btn-secondary text-base">
-              Jump straight to tools
+            <Link to="/games" className="btn-secondary text-base">
+              Browse all games
             </Link>
           </div>
         </div>
@@ -100,14 +100,14 @@ export default function Home() {
       <section className="mx-auto max-w-4xl px-4 pb-24 sm:px-6">
         <div className="card overflow-hidden p-10 text-center">
           <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-forest-500/10 via-transparent to-ember-500/10" />
-          <span className="text-4xl">🔥</span>
-          <h2 className="section-heading mt-4">Running Color Wars this week?</h2>
+          <span className="text-4xl">⏳</span>
+          <h2 className="section-heading mt-4">Got 60 seconds?</h2>
           <p className="mx-auto mt-3 max-w-xl text-forest-300/70">
-            Use one shared scoreboard across every event and keep the whole camp on the
-            same live leaderboard.
+            Sneak up on the counselor in Prank Wars, dodge sharks, or see if you can out-trade
+            the market bot — every game here is a quick round away.
           </p>
-          <Link to="/games/color-wars" className="btn-primary mt-6 inline-flex">
-            Set up Color Wars
+          <Link to="/games/prank-wars" className="btn-primary mt-6 inline-flex">
+            Try Prank Wars
           </Link>
         </div>
       </section>

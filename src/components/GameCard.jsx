@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { getTheme } from '../lib/theme.js'
+import { PLAYABLE_GAMES } from '../games/index.js'
 
 export default function GameCard({ game }) {
   const t = getTheme(game.theme)
+  const isPlayable = Boolean(PLAYABLE_GAMES[game.slug])
 
   return (
     <Link
@@ -28,7 +30,7 @@ export default function GameCard({ game }) {
       </div>
 
       <div className={`mt-4 flex items-center gap-1 text-sm font-semibold ${t.text}`}>
-        View game
+        {isPlayable ? '▶ Play now' : 'View game'}
         <span className="transition-transform group-hover:translate-x-1">→</span>
       </div>
     </Link>
