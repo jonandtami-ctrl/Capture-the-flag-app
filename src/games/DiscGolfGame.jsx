@@ -4,23 +4,45 @@ import useGameLoop from './engine/useGameLoop.js'
 import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
-import { clamp, dist, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
-const MAX_POWER = 420
+const MAX_POWER = 620
 const MAX_PULL = 140
+const FRICTION = 0.988
 const BASKET_R = 24
 
 const HOLES = [
-  { tee: { x: 80, y: 440 }, basket: { x: 720, y: 80 }, par: 3, trees: [{ x: 380, y: 260, r: 26 }, { x: 560, y: 150, r: 22 }] },
-  { tee: { x: 80, y: 80 }, basket: { x: 720, y: 440 }, par: 3, trees: [{ x: 300, y: 220, r: 24 }, { x: 500, y: 350, r: 24 }, { x: 620, y: 230, r: 20 }] },
-  { tee: { x: 400, y: 460 }, basket: { x: 400, y: 50 }, par: 4, trees: [{ x: 340, y: 260, r: 24 }, { x: 460, y: 260, r: 24 }, { x: 400, y: 150, r: 22 }] },
+  // Trees sit just off the direct tee-to-basket line (not on it) — a
+  // precise, full-power throw can thread the gap for a hole-in-one, while
+  // anything less exact clips one on the way past.
+  { tee: { x: 80, y: 440 }, basket: { x: 720, y: 80 }, par: 3, trees: [{ x: 358, y: 335, r: 26 }, { x: 474, y: 167, r: 22 }] },
+  { tee: { x: 80, y: 80 }, basket: { x: 720, y: 440 }, par: 3, trees: [{ x: 330, y: 175, r: 24 }, { x: 500, y: 350, r: 24 }, { x: 620, y: 230, r: 20 }] },
+  { tee: { x: 400, y: 460 }, basket: { x: 400, y: 50 }, par: 4, trees: [{ x: 340, y: 260, r: 24 }, { x: 460, y: 260, r: 24 }, { x: 445, y: 150, r: 22 }] },
 ]
 
 function freshHoleState(holeIdx) {
   const hole = HOLES[holeIdx]
-  return { disc: { x: hole.tee.x, y: hole.tee.y }, vx: 0, vy: 0, flying: false, strokes: 0 }
+  return {
+    disc: { x: hole.tee.x, y: hole.tee.y },
+    vx: 0,
+    vy: 0,
+    flying: false,
+    strokes: 0,
+    floatingText: [],
+    shake: { trauma: 0 },
+  }
 }
 
 export default function DiscGolfGame() {
@@ -69,6 +91,10 @@ export default function DiscGolfGame() {
 
   const onPointerDown = (e) => {
     if (phase !== 'aiming' || stateRef.current.flying) return
+    // Explicit pointer capture so the drag keeps tracking this element even
+    // if the pointer moves fast or briefly leaves its bounds — without it,
+    // the browser can fail to deliver the matching pointerup at all.
+    e.currentTarget.setPointerCapture(e.pointerId)
     // Anchor the pull at the disc's actual rest position (not wherever the
     // finger first landed) so grabbing anywhere near it still feels right.
     dragRef.current = { x: stateRef.current.disc.x, y: stateRef.current.disc.y }
@@ -107,8 +133,11 @@ export default function DiscGolfGame() {
     if (phase === 'aiming' && s.flying) {
       s.disc.x += s.vx * dt
       s.disc.y += s.vy * dt
-      s.vx *= 0.965
-      s.vy *= 0.965
+      // Decay expressed per 1/60s frame, but applied relative to actual dt
+      // so total travel distance doesn't depend on the display's refresh rate.
+      const frictionThisFrame = Math.pow(FRICTION, dt * 60)
+      s.vx *= frictionThisFrame
+      s.vy *= frictionThisFrame
       s.disc.x = clamp(s.disc.x, 10, W - 10)
       s.disc.y = clamp(s.disc.y, 10, H - 10)
 
@@ -117,6 +146,8 @@ export default function DiscGolfGame() {
           s.vx = 0
           s.vy = 0
           spawnBurst(s.particles, s.disc.x, s.disc.y, '#43cc86', 10)
+          spawnFloatingText(s.floatingText, s.disc.x, s.disc.y - 20, 'BONK!', '#43cc86', 16)
+          triggerShake(s.shake, 0.25)
         }
       }
 
@@ -127,6 +158,8 @@ export default function DiscGolfGame() {
         s.flying = false
         if (dist(s.disc, hole.basket) < BASKET_R) {
           spawnBurst(s.particles, hole.basket.x, hole.basket.y, '#f9581a', 22)
+          triggerShake(s.shake, 0.4)
+          spawnFloatingText(s.floatingText, hole.basket.x, hole.basket.y - 30, s.strokes === 1 ? 'HOLE IN ONE!' : 'IN THE BASKET!', '#ffd166', s.strokes === 1 ? 22 : 18)
           const total = s.totalStrokes + s.strokes
           s.totalStrokes = total
           setTotalStrokes(total)
@@ -138,6 +171,9 @@ export default function DiscGolfGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
     ctx.fillStyle = '#0b1f14'
     ctx.fillRect(0, 0, W, H)
     ctx.globalAlpha = 0.5
@@ -208,6 +244,8 @@ export default function DiscGolfGame() {
     drawEmoji(ctx, '🥏', discDrawX, discDrawY, 24)
 
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
 
   const hole = HOLES[holeIdx]

@@ -9,24 +9,65 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  rand,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
+const CENTER = { x: W / 2, y: H / 2 }
+const RADIUS = 220
 const SPEED = 220
 const ROUND_SECONDS = 75
 const START_HEALTH = 5
 
+// Keeps an entity inside the circular arena AND on its own side of the
+// center line — projecting radially toward the center preserves which
+// side of that line a point is on, so this one clamp handles both.
+function clampToArenaHalf(x, y, side, margin = 16) {
+  const dx = x - CENTER.x
+  const dy = y - CENTER.y
+  const d = Math.hypot(dx, dy)
+  const maxR = RADIUS - margin
+  let nx = x
+  let ny = y
+  if (d > maxR) {
+    const scale = maxR / d
+    nx = CENTER.x + dx * scale
+    ny = CENTER.y + dy * scale
+  }
+  if (side === 'left') nx = Math.min(nx, CENTER.x - margin)
+  else nx = Math.max(nx, CENTER.x + margin)
+  return { x: nx, y: ny }
+}
+
 function freshState(mult) {
   return {
     mult,
-    player: { x: 130, y: H / 2 },
-    ai: { x: W - 130, y: H / 2, vy: rand(-60, 60), throwCd: rand(0.8, 1.6) / mult.speed },
-    playerFlame: { x: 60, y: H / 2, health: START_HEALTH },
-    aiFlame: { x: W - 60, y: H / 2, health: START_HEALTH },
+    player: { x: CENTER.x - RADIUS + 90, y: CENTER.y },
+    ai: {
+      x: CENTER.x + RADIUS - 90,
+      y: CENTER.y,
+      target: { x: CENTER.x + RADIUS - 90, y: CENTER.y },
+      wanderT: rand(0.5, 1.5),
+      throwCd: rand(0.6, 1.2) / mult.speed,
+    },
+    playerFlame: { x: CENTER.x - RADIUS + 30, y: CENTER.y, health: START_HEALTH },
+    aiFlame: { x: CENTER.x + RADIUS - 30, y: CENTER.y, health: START_HEALTH },
     balloons: [], // {x,y,tx,ty,speed,from:'player'|'ai'}
     telegraphs: [], // {x,y,t}
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
@@ -96,25 +137,36 @@ export default function FlameBattlersGame() {
         else setPhase('lost')
       }
 
-      // player movement
+      // player movement — free to roam their half of the circular arena
       const kd = getDirection()
       const dx = kd.x !== 0 || kd.y !== 0 ? kd.x : joyRef.current.x
       const dy = kd.x !== 0 || kd.y !== 0 ? kd.y : joyRef.current.y
-      s.player.x = clamp(s.player.x + dx * SPEED * dt, 20, W / 2 - 30)
-      s.player.y = clamp(s.player.y + dy * SPEED * dt, 30, H - 30)
+      const nextPlayer = clampToArenaHalf(s.player.x + dx * SPEED * dt, s.player.y + dy * SPEED * dt, 'left')
+      s.player.x = nextPlayer.x
+      s.player.y = nextPlayer.y
 
-      // AI wander
-      s.ai.y = clamp(s.ai.y + s.ai.vy * dt, 40, H - 40)
-      if (s.ai.y <= 40 || s.ai.y >= H - 40) s.ai.vy *= -1
-      if (Math.random() < 0.01) s.ai.vy = rand(-70, 70)
+      // AI wander — roams its whole half of the arena, not just a strip,
+      // so its position (and incoming balloons) is harder to predict
+      const aiSpeed = 150 * s.mult.speed
+      s.ai.wanderT -= dt
+      if (s.ai.wanderT <= 0 || dist(s.ai, s.ai.target) < 12) {
+        const angle = rand(0, Math.PI * 2)
+        const r = rand(0, RADIUS - 50)
+        s.ai.target = clampToArenaHalf(CENTER.x + RADIUS - 90 + Math.cos(angle) * r * 0.4, CENTER.y + Math.sin(angle) * r, 'right')
+        s.ai.wanderT = rand(0.8, 1.8)
+      }
+      const toTarget = Math.atan2(s.ai.target.y - s.ai.y, s.ai.target.x - s.ai.x)
+      const moved = clampToArenaHalf(s.ai.x + Math.cos(toTarget) * aiSpeed * dt, s.ai.y + Math.sin(toTarget) * aiSpeed * dt, 'right')
+      s.ai.x = moved.x
+      s.ai.y = moved.y
 
-      // AI throw cadence with telegraph
+      // AI throw cadence with telegraph — faster and less predictable now
       s.ai.throwCd -= dt
       if (s.ai.throwCd <= 0) {
-        s.ai.throwCd = rand(1.2, 2.2) / s.mult.speed
-        const tx = s.playerFlame.x + rand(-14, 14)
-        const ty = s.playerFlame.y + rand(-14, 14)
-        s.telegraphs.push({ x: tx, y: ty, t: 0.45 })
+        s.ai.throwCd = rand(0.9, 1.7) / s.mult.speed
+        const tx = s.playerFlame.x + rand(-18, 18)
+        const ty = s.playerFlame.y + rand(-18, 18)
+        s.telegraphs.push({ x: tx, y: ty, t: 0.4 })
       }
 
       // resolve telegraphs -> spawn AI balloons
@@ -128,7 +180,7 @@ export default function FlameBattlersGame() {
             tx: tg.x,
             ty: tg.y,
             t: 0,
-            duration: dist(s.ai, { x: tg.x, y: tg.y }) / 380,
+            duration: dist(s.ai, { x: tg.x, y: tg.y }) / (420 * s.mult.speed),
             from: 'ai',
           })
           s.telegraphs.splice(i, 1)
@@ -147,14 +199,19 @@ export default function FlameBattlersGame() {
             // does it hit the player (blocked) or the flame?
             if (dist(s.player, { x: b.tx, y: b.ty }) < 26) {
               spawnBurst(s.particles, b.tx, b.ty, '#67e8f9', 10)
+              spawnFloatingText(s.floatingText, b.tx, b.ty - 20, 'DODGED!', '#7dd3fc', 15)
             } else {
               s.playerFlame.health = Math.max(0, s.playerFlame.health - 1)
               spawnBurst(s.particles, s.playerFlame.x, s.playerFlame.y, '#ff7a3d', 14)
+              spawnFloatingText(s.floatingText, s.playerFlame.x, s.playerFlame.y - 30, '-1 🔥', '#ff7a3d', 18)
+              triggerShake(s.shake, 0.3)
               setHp((h) => ({ ...h, player: s.playerFlame.health }))
             }
           } else if (dist(s.aiFlame, { x: b.tx, y: b.ty }) < 30) {
             s.aiFlame.health = Math.max(0, s.aiFlame.health - 1)
             spawnBurst(s.particles, s.aiFlame.x, s.aiFlame.y, '#43cc86', 14)
+            spawnFloatingText(s.floatingText, s.aiFlame.x, s.aiFlame.y - 30, 'HIT! -1 🔥', '#43cc86', 18)
+            triggerShake(s.shake, 0.3)
             setHp((h) => ({ ...h, ai: s.aiFlame.health }))
           } else {
             spawnBurst(s.particles, b.tx, b.ty, '#7dd3fc', 8)
@@ -175,15 +232,40 @@ export default function FlameBattlersGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
-    ctx.fillStyle = '#0b1f14'
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
+    ctx.fillStyle = '#06140d'
     ctx.fillRect(0, 0, W, H)
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(CENTER.x, CENTER.y, RADIUS, 0, Math.PI * 2)
+    ctx.clip()
+    ctx.fillStyle = '#0b1f14'
+    ctx.fillRect(0, 0, CENTER.x, H)
+    ctx.fillStyle = '#1a0f08'
+    ctx.fillRect(CENTER.x, 0, W - CENTER.x, H)
+    ctx.restore()
+
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(CENTER.x, CENTER.y, RADIUS, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.restore()
+
+    ctx.save()
     ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.lineWidth = 2
     ctx.setLineDash([8, 8])
     ctx.beginPath()
-    ctx.moveTo(W / 2, 0)
-    ctx.lineTo(W / 2, H)
+    ctx.moveTo(CENTER.x, CENTER.y - RADIUS)
+    ctx.lineTo(CENTER.x, CENTER.y + RADIUS)
     ctx.stroke()
     ctx.setLineDash([])
+    ctx.restore()
 
     // flame stacks (health as flame emoji count)
     drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 30, 22)
@@ -210,6 +292,8 @@ export default function FlameBattlersGame() {
     drawEmoji(ctx, '🧑‍🚒', s.player.x, s.player.y, 30)
 
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
 
   return (

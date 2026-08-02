@@ -9,7 +9,19 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, dist, rand, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  rand,
+  steer,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
@@ -18,6 +30,13 @@ const BOUNTY_SPEED = 165
 const ROUND_SECONDS = 45
 const CATCH_R = 30
 const DETECT_R = 130
+// Each catch makes the hunter's reputation (and silhouette) grow, like a
+// Snake/Hole.io meter — but here bigger also means louder: bounties clock
+// you from further away, so the round gets harder as your streak grows.
+const GROWTH_DETECT_STEP = 16
+const GROWTH_SIZE_STEP = 5
+const MAX_GROWTH_STEPS = 6
+const COMBO_WINDOW = 4
 
 const ALIASES = ['The Marshmallow Bandit', 'Sergeant Sasquatch', 'The Bug Juice Outlaw', 'Captain Campfire', 'Doc Poison Ivy']
 
@@ -33,6 +52,12 @@ function freshState(mult) {
       wanderDir: { x: rand(-1, 1), y: rand(-1, 1) },
     })),
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
+    growth: 0,
+    clock: 0,
+    lastCatchClock: -99,
+    combo: 0,
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
@@ -49,6 +74,7 @@ export default function BountyHuntersGame() {
   const [caught, setCaught] = useState(0)
   const total = ALIASES.slice(0, 4).length
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [growth, setGrowth] = useState(0)
   const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
@@ -63,6 +89,7 @@ export default function BountyHuntersGame() {
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setCaught(0)
+    setGrowth(0)
     setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
@@ -73,12 +100,17 @@ export default function BountyHuntersGame() {
     if (!ctx) return
 
     if (phase === 'playing') {
+      s.clock += dt
       s.timeLeft -= dt
       if (s.timeLeft <= 0) {
         s.timeLeft = 0
         if (s.bounties.length === 0) winGame()
         else setPhase('lost')
       }
+
+      const growthStep = Math.min(s.growth, MAX_GROWTH_STEPS)
+      const effDetectR = DETECT_R + growthStep * GROWTH_DETECT_STEP
+      const effCatchR = CATCH_R + growthStep * 2.5
 
       const kd = getDirection()
       const dx = kd.x !== 0 || kd.y !== 0 ? kd.x : joyRef.current.x
@@ -89,7 +121,7 @@ export default function BountyHuntersGame() {
       for (let i = s.bounties.length - 1; i >= 0; i--) {
         const b = s.bounties[i]
         const d = dist(b, s.player)
-        if (d < DETECT_R) {
+        if (d < effDetectR) {
           steer(b, s.player, BOUNTY_SPEED * s.mult.speed, true)
         } else {
           b.wanderT -= dt
@@ -103,8 +135,19 @@ export default function BountyHuntersGame() {
         b.x = clamp(b.x + (b.vx ?? 0) * dt, 20, W - 20)
         b.y = clamp(b.y + (b.vy ?? 0) * dt, 20, H - 20)
 
-        if (d < CATCH_R) {
+        if (d < effCatchR) {
+          const combo = s.clock - s.lastCatchClock < COMBO_WINDOW ? s.combo + 1 : 1
+          s.combo = combo
+          s.lastCatchClock = s.clock
+          s.growth += 1
+
+          const bonus = combo > 1 ? Math.min(combo, 5) : 0
+          s.timeLeft += bonus
+
           spawnBurst(s.particles, b.x, b.y, '#f9581a', 18)
+          triggerShake(s.shake, 0.35)
+          spawnFloatingText(s.floatingText, b.x, b.y - 20, combo > 1 ? `COMBO x${combo}! +${bonus}s` : 'GOTCHA!', '#ffd166', combo > 1 ? 18 : 16)
+
           s.bounties.splice(i, 1)
           setCaught((c) => c + 1)
           if (s.bounties.length === 0) winGame()
@@ -115,11 +158,20 @@ export default function BountyHuntersGame() {
       if (hudAccum.current > 0.15) {
         hudAccum.current = 0
         setTimeLeft(Math.ceil(s.timeLeft))
+        setGrowth(Math.min(s.growth, MAX_GROWTH_STEPS))
       }
     }
 
     // --- draw ---
+    const growthStep = Math.min(s.growth, MAX_GROWTH_STEPS)
+    const effDetectR = DETECT_R + growthStep * GROWTH_DETECT_STEP
+    const playerSize = 30 + growthStep * GROWTH_SIZE_STEP
+
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
+
     ctx.fillStyle = '#0b1f14'
     ctx.fillRect(0, 0, W, H)
     ctx.globalAlpha = 0.4
@@ -127,7 +179,7 @@ export default function BountyHuntersGame() {
     ctx.globalAlpha = 1
 
     for (const b of s.bounties) {
-      const near = dist(b, s.player) < DETECT_R + 40
+      const near = dist(b, s.player) < effDetectR + 40
       drawEmoji(ctx, '🥷', b.x, b.y, 28)
       if (near) {
         ctx.save()
@@ -139,21 +191,36 @@ export default function BountyHuntersGame() {
       }
     }
 
-    drawEmoji(ctx, '🤠', s.player.x, s.player.y, 30)
+    if (growthStep > 0) {
+      ctx.save()
+      ctx.globalAlpha = 0.5
+      ctx.strokeStyle = '#ffd166'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(s.player.x, s.player.y, playerSize * 0.62, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    }
+    drawEmoji(ctx, '🤠', s.player.x, s.player.y, playerSize)
     ctx.save()
     ctx.strokeStyle = 'rgba(249,88,26,0.25)'
     ctx.beginPath()
-    ctx.arc(s.player.x, s.player.y, DETECT_R, 0, Math.PI * 2)
+    ctx.arc(s.player.x, s.player.y, effDetectR, 0, Math.PI * 2)
     ctx.stroke()
     ctx.restore()
 
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
 
   return (
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
-        <HUD left={[`🎯 Caught: ${caught}/${total}`]} right={[`⏱ ${timeLeft}s`]} />
+        <HUD
+          left={[`🎯 Caught: ${caught}/${total}`, growth > 0 ? `📈 Notoriety: +${growth}` : null].filter(Boolean)}
+          right={[`⏱ ${timeLeft}s`]}
+        />
         <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}

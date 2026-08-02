@@ -14,8 +14,8 @@ export default function Footer() {
               <span className="font-display text-lg text-white">CampHQ</span>
             </div>
             <p className="mt-2 max-w-xs text-sm text-forest-300/60">
-              Team randomizers, timers, and scoreboards for the camp games everyone
-              actually wants to play.
+              The camp games everyone actually wants to play — pick one and jump
+              straight in.
             </p>
           </div>
 
@@ -25,7 +25,6 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2 text-sm text-forest-300/70">
               <li><Link to="/games" className="hover:text-forest-100">Program Central</Link></li>
-              <li><Link to="/tools" className="hover:text-forest-100">Standalone Tools</Link></li>
               <li><Link to="/about" className="hover:text-forest-100">About</Link></li>
             </ul>
           </div>

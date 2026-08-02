@@ -9,7 +9,18 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  rand,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
@@ -18,13 +29,17 @@ const TARGET = { x: W - 90, y: H / 2 }
 const PLAYER_SPEED = 200
 const ROUND_SECONDS = 45
 const CATCH_R = 46
+const TOTAL_DIST = dist(START, TARGET)
 
 function freshState(mult) {
   return {
     mult,
     player: { x: START.x, y: START.y },
-    counselor: { watching: false, warn: false, t: rand(1.5, 2.5) / mult.speed },
+    counselor: { watching: false, warn: false, t: rand(1.3, 2.2) / mult.speed },
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
+    busts: 0,
     caughtFlash: 0,
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
@@ -74,11 +89,11 @@ export default function PrankWarsGame() {
         if (c.watching) {
           c.watching = false
           c.warn = false
-          c.t = rand(1.6, 3) / s.mult.speed
+          c.t = rand(1.3, 2.4) / s.mult.speed
         } else {
           c.watching = true
           c.warn = false
-          c.t = rand(1.2, 2.2) * s.mult.speed
+          c.t = rand(1.4, 2.6) * s.mult.speed
         }
       }
 
@@ -89,6 +104,9 @@ export default function PrankWarsGame() {
 
       if (moving && c.watching) {
         spawnBurst(s.particles, s.player.x, s.player.y, '#ff7a3d', 16)
+        triggerShake(s.shake, 0.4)
+        s.busts += 1
+        spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'BUSTED! BACK TO START', '#ff7a3d', 16)
         s.player.x = START.x
         s.player.y = START.y
         s.caughtFlash = 0.8
@@ -112,6 +130,9 @@ export default function PrankWarsGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
     ctx.fillStyle = '#0b1f14'
     ctx.fillRect(0, 0, W, H)
     ctx.globalAlpha = 0.35
@@ -141,12 +162,19 @@ export default function PrankWarsGame() {
     ctx.restore()
 
     updateAndDrawParticles(ctx, stateRef.current.particles, dt)
+    updateAndDrawFloatingText(ctx, stateRef.current.floatingText, dt)
+    ctx.restore()
   }, true)
+
+  const progressPct = Math.round(clamp((1 - dist(stateRef.current.player, TARGET) / TOTAL_DIST) * 100, 0, 100))
 
   return (
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
-        <HUD left={[stateRef.current.counselor?.watching ? '👀 Freeze!' : '✅ Clear to move']} right={[`⏱ ${timeLeft}s`]} />
+        <HUD
+          left={[stateRef.current.counselor?.watching ? '👀 Freeze!' : '✅ Clear to move', `📏 ${progressPct}% there`]}
+          right={[`⏱ ${timeLeft}s`]}
+        />
         <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}

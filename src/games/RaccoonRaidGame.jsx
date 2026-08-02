@@ -9,14 +9,25 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  rand,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
 const PLAYER_Y = 440
 const STASH = { x: W / 2, y: 470 }
 const ROUND_SECONDS = 60
-const START_LIVES = 5
+const START_LIVES = 4
+const COMBO_WINDOW = 1.1
 
 function freshState(mult) {
   return {
@@ -25,8 +36,12 @@ function freshState(mult) {
     raccoons: [],
     shots: [],
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
     spawnCd: 1,
     elapsed: 0,
+    combo: 0,
+    lastHitAt: -99,
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
@@ -90,11 +105,11 @@ export default function RaccoonRaidGame() {
       s.spawnCd -= dt
       if (s.spawnCd <= 0) {
         const difficulty = clamp(s.elapsed / ROUND_SECONDS, 0, 1)
-        s.spawnCd = (rand(1.3 - difficulty * 0.8, 2.2 - difficulty * 0.9)) / s.mult.speed
+        s.spawnCd = (rand(1.1 - difficulty * 0.85, 1.9 - difficulty * 0.95)) / s.mult.speed
         s.raccoons.push({
           x: rand(50, W - 50),
           y: -20,
-          speed: (rand(70, 110) + difficulty * 70) * s.mult.speed,
+          speed: (rand(80, 125) + difficulty * 85) * s.mult.speed,
           wobble: rand(0, Math.PI * 2),
           alive: true,
         })
@@ -109,6 +124,9 @@ export default function RaccoonRaidGame() {
         if (r.y >= STASH.y - 10) {
           s.raccoons.splice(i, 1)
           spawnBurst(s.particles, r.x, STASH.y, '#ff7a3d', 12)
+          triggerShake(s.shake, 0.5)
+          spawnFloatingText(s.floatingText, STASH.x, STASH.y - 20, 'STASH RAIDED!', '#ff7a3d', 17)
+          s.combo = 0
           setLives((l) => {
             const next = Math.max(0, l - 1)
             if (next === 0) setPhase('lost')
@@ -127,7 +145,12 @@ export default function RaccoonRaidGame() {
           if (Math.abs(shot.x - r.x) < 22 && Math.abs(shot.y - r.y) < 22) {
             s.raccoons.splice(j, 1)
             spawnBurst(s.particles, r.x, r.y, '#43cc86', 14)
-            setScore((sc) => sc + 1)
+            s.combo = s.elapsed - s.lastHitAt < COMBO_WINDOW ? s.combo + 1 : 1
+            s.lastHitAt = s.elapsed
+            const gain = s.combo > 1 ? s.combo : 1
+            setScore((sc) => sc + gain)
+            triggerShake(s.shake, 0.15)
+            spawnFloatingText(s.floatingText, r.x, r.y - 16, s.combo > 1 ? `COMBO x${s.combo}!` : '+1', '#43cc86', s.combo > 1 ? 18 : 15)
             hit = true
             break
           }
@@ -144,6 +167,9 @@ export default function RaccoonRaidGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
     ctx.fillStyle = '#0b1f14'
     ctx.fillRect(0, 0, W, H)
     ctx.globalAlpha = 0.4
@@ -164,6 +190,8 @@ export default function RaccoonRaidGame() {
 
     drawEmoji(ctx, '🤺', s.player.x, PLAYER_Y, 32)
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
 
   return (

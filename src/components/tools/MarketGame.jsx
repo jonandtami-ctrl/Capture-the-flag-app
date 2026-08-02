@@ -48,16 +48,22 @@ export default function MarketGame() {
   const [remaining, setRemaining] = useState(90)
   const [running, setRunning] = useState(false)
   const [trade, setTrade] = useState({})
+  const [lastRoundValues, setLastRoundValues] = useState({})
   const intervalRef = useRef(null)
   const sound = useSound()
 
   const advanceRound = () => {
-    setAssets((prev) =>
-      prev.map((a) => {
+    setAssets((prev) => {
+      const updated = prev.map((a) => {
         const price = nextPrice(a)
         return { ...a, price, history: [...a.history, price] }
-      }),
-    )
+      })
+      setTeams((teamsNow) => {
+        setLastRoundValues(Object.fromEntries(teamsNow.map((t) => [t.id, portfolioValue(t, prev)])))
+        return teamsNow
+      })
+      return updated
+    })
     setRunning(false)
     sound.complete()
     setRound((r) => r + 1)
@@ -96,6 +102,7 @@ export default function MarketGame() {
     setRound(1)
     setRemaining(Number(roundSeconds) || 90)
     setRunning(false)
+    setLastRoundValues({})
     setPhase('playing')
     sound.start()
   }
@@ -299,7 +306,12 @@ export default function MarketGame() {
           const up = delta > 0
           const flat = delta === 0
           return (
-            <div key={a.id} className="rounded-xl border border-white/10 bg-dusk-900/60 p-3 text-center">
+            <div
+              key={a.id}
+              className={`rounded-xl border p-3 text-center transition-colors duration-700 ${
+                up ? 'border-forest-400/40 bg-forest-500/10' : !flat ? 'border-ember-400/40 bg-ember-500/10' : 'border-white/10 bg-dusk-900/60'
+              }`}
+            >
               <div className="text-2xl">{a.emoji}</div>
               <div className="mt-1 text-xs text-forest-300/60">{a.name}</div>
               <div className="mt-1 font-display text-xl text-white">${a.price}</div>
@@ -339,7 +351,18 @@ export default function MarketGame() {
                   </div>
                   <div className="mt-1 flex items-center justify-between text-sm">
                     <span className="text-forest-300/60">Portfolio value</span>
-                    <span className="font-display text-lg text-white">${value.toLocaleString()}</span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-display text-lg text-white">${value.toLocaleString()}</span>
+                      {lastRoundValues[team.id] != null && (() => {
+                        const delta = value - lastRoundValues[team.id]
+                        if (delta === 0) return null
+                        return (
+                          <span className={`text-xs font-semibold ${delta > 0 ? 'text-forest-400' : 'text-ember-400'}`}>
+                            {delta > 0 ? '▲' : '▼'} ${Math.abs(delta).toLocaleString()}
+                          </span>
+                        )
+                      })()}
+                    </span>
                   </div>
 
                   {Object.entries(team.holdings).some(([, qty]) => qty > 0) && (

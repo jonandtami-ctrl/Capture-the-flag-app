@@ -61,6 +61,9 @@ export default function GameDetail() {
           </div>
         )}
 
+        {/* Team randomizer / timer / scoreboard companion tools are hidden
+            for now — single-device play only. Re-enable this block once
+            server-backed multiplayer needs them again:
         {game.tools?.length > 0 && !game.hideCompanionTools && (
           <div className="mt-10">
             <h2 className="font-display text-xl text-white">🏕️ Playing this for real at camp?</h2>
@@ -71,7 +74,7 @@ export default function GameDetail() {
               <ToolTabs tools={game.tools} storageKey={game.slug} />
             </div>
           </div>
-        )}
+        )} */}
 
         <div className="mt-10">
           <AdSlot format="horizontal" />

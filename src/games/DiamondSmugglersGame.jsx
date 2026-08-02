@@ -9,17 +9,28 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, dist, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
 const START = { x: 60, y: H - 60 }
 const BUYER = { x: W - 60, y: 60 }
 const POLICE = { x: W / 2, y: H / 2 }
-const CONE_RANGE = 260
+const CONE_RANGE = 280
 const CONE_HALF_WIDTH = 0.42 // radians
 const PLAYER_SPEED = 200
 const ROUND_SECONDS = 45
+const TOTAL_DIST = dist(START, BUYER)
 
 function freshState(mult) {
   return {
@@ -28,6 +39,8 @@ function freshState(mult) {
     coneAngle: 0,
     coneDir: 1,
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
     caughtFlash: 0,
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
     t: 0,
@@ -76,7 +89,7 @@ export default function DiamondSmugglersGame() {
       if (s.caughtFlash > 0) s.caughtFlash -= dt
 
       // sweeping searchlight cone
-      s.coneAngle = Math.sin(s.t * 0.7 * s.mult.speed) * Math.PI * 0.9
+      s.coneAngle = Math.sin(s.t * 0.82 * s.mult.speed) * Math.PI * 0.9
 
       const kd = getDirection()
       const dx = kd.x !== 0 || kd.y !== 0 ? kd.x : joyRef.current.x
@@ -89,6 +102,8 @@ export default function DiamondSmugglersGame() {
 
       if (inCone) {
         spawnBurst(s.particles, s.player.x, s.player.y, '#ff7a3d', 16)
+        triggerShake(s.shake, 0.4)
+        spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'SPOTTED! BACK TO START', '#ff7a3d', 16)
         s.player.x = START.x
         s.player.y = START.y
         s.caughtFlash = 0.8
@@ -112,6 +127,9 @@ export default function DiamondSmugglersGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
     ctx.fillStyle = '#150c1a'
     ctx.fillRect(0, 0, W, H)
 
@@ -141,12 +159,16 @@ export default function DiamondSmugglersGame() {
     ctx.restore()
 
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
+
+  const progressPct = Math.round(clamp((1 - dist(stateRef.current.player, BUYER) / TOTAL_DIST) * 100, 0, 100))
 
   return (
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
-        <HUD left={['💎 Reach the buyer']} right={[`⏱ ${timeLeft}s`]} />
+        <HUD left={['💎 Reach the buyer', `📏 ${progressPct}% there`]} right={[`⏱ ${timeLeft}s`]} />
         <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}

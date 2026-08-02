@@ -9,15 +9,27 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
-import { clamp, dist, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
+import {
+  clamp,
+  dist,
+  steer,
+  drawEmoji,
+  spawnBurst,
+  updateAndDrawParticles,
+  spawnFloatingText,
+  updateAndDrawFloatingText,
+  triggerShake,
+  updateShake,
+} from './engine/utils.js'
 
 const W = 800
 const H = 500
 const PLAYER_SPEED = 230
-const AI_SPEED = 195
+const AI_SPEED = 212
 const PLAYER_R = 16
 const AI_R = 16
 const ROUND_SECONDS = 60
+const DEFENDER_SIGHT = 175
 
 function freshState(mult) {
   return {
@@ -29,8 +41,11 @@ function freshState(mult) {
       { x: W - 180, y: H / 2 - 90, home: { x: W - 180, y: H / 2 - 90 }, mode: 'patrol', wait: 0 },
       { x: W - 180, y: H / 2 + 90, home: { x: W - 180, y: H / 2 + 90 }, mode: 'patrol', wait: 0 },
       { x: W - 260, y: H / 2, home: { x: W - 260, y: H / 2 }, mode: 'patrol', wait: 0 },
+      { x: W - 100, y: H / 2, home: { x: W - 100, y: H / 2 }, mode: 'patrol', wait: 0 },
     ],
     particles: [],
+    floatingText: [],
+    shake: { trauma: 0 },
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
@@ -83,6 +98,8 @@ export default function CaptureTheFlagGame() {
         s.enemyFlag.taken = true
         s.player.carrying = true
         setCarrying(true)
+        spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'FLAG GRABBED! RUN!', '#ffd166', 17)
+        triggerShake(s.shake, 0.25)
       }
 
       // Win: carrying flag back home
@@ -94,10 +111,10 @@ export default function CaptureTheFlagGame() {
 
       // Defenders: patrol vs chase
       for (const d of s.defenders) {
-        const seesPlayer = s.player.x > W / 2 - 20 && dist(d, s.player) < 150
+        const seesPlayer = s.player.x > W / 2 - 20 && dist(d, s.player) < DEFENDER_SIGHT
         if (seesPlayer) {
           d.mode = 'chase'
-        } else if (d.mode === 'chase' && dist(d, s.player) > 220) {
+        } else if (d.mode === 'chase' && dist(d, s.player) > 240) {
           d.mode = 'patrol'
         }
 
@@ -122,6 +139,8 @@ export default function CaptureTheFlagGame() {
         // Tag check
         if (s.player.x > W / 2 - 40 && dist(d, s.player) < PLAYER_R + AI_R && s.player.tagFlashT <= 0) {
           spawnBurst(s.particles, s.player.x, s.player.y, '#ff7a3d', 16)
+          triggerShake(s.shake, 0.45)
+          spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, s.player.carrying ? 'TAGGED! FLAG DROPPED' : 'TAGGED!', '#ff7a3d', 16)
           s.player.tagFlashT = 1
           s.player.carrying = false
           s.enemyFlag.taken = false
@@ -140,6 +159,9 @@ export default function CaptureTheFlagGame() {
 
     // --- draw ---
     ctx.clearRect(0, 0, width, height)
+    const shakeOffset = updateShake(s.shake, dt)
+    ctx.save()
+    ctx.translate(shakeOffset.x, shakeOffset.y)
     ctx.fillStyle = '#0b1f14'
     ctx.fillRect(0, 0, W / 2, H)
     ctx.fillStyle = '#1a0f08'
@@ -174,6 +196,8 @@ export default function CaptureTheFlagGame() {
     ctx.restore()
 
     updateAndDrawParticles(ctx, s.particles, dt)
+    updateAndDrawFloatingText(ctx, s.floatingText, dt)
+    ctx.restore()
   }, true)
 
   return (

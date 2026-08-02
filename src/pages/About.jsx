@@ -18,9 +18,8 @@ export default function About() {
           high score for a while.
         </p>
         <p>
-          Planning the real, physical version for an actual camp or backyard? Every game
-          page also includes companion tools — a team randomizer, timer, and
-          scoreboard — for running it in person.
+          Just pick a game and jump in — no sign-up, no setup, no waiting on anyone
+          else.
         </p>
         <p>
           Everything runs entirely in your browser — no backend, no accounts, no data

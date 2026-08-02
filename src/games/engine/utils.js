@@ -75,3 +75,49 @@ export function updateAndDrawParticles(ctx, particles, dt) {
     ctx.restore()
   }
 }
+
+// Floating score/combo text ("+1", "COMBO x3!") — the quick reward pop that
+// makes an action feel like it landed. Push with spawnFloatingText, render
+// (after particles, so text sits on top) with updateAndDrawFloatingText.
+export function spawnFloatingText(texts, x, y, text, color = '#ffffff', size = 20) {
+  texts.push({ x, y, text, color, size, life: 0.9, age: 0, vy: -60 })
+}
+
+export function updateAndDrawFloatingText(ctx, texts, dt) {
+  for (let i = texts.length - 1; i >= 0; i--) {
+    const t = texts[i]
+    t.age += dt
+    if (t.age >= t.life) {
+      texts.splice(i, 1)
+      continue
+    }
+    t.y += t.vy * dt
+    t.vy *= Math.pow(0.92, dt * 60)
+    const p = t.age / t.life
+    const alpha = p < 0.65 ? 1 : 1 - (p - 0.65) / 0.35
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.font = `800 ${t.size}px "Baloo 2", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.lineWidth = 3
+    ctx.strokeStyle = 'rgba(11,31,20,0.65)'
+    ctx.strokeText(t.text, t.x, t.y)
+    ctx.fillStyle = t.color
+    ctx.fillText(t.text, t.x, t.y)
+    ctx.restore()
+  }
+}
+
+// Screen-shake "trauma" model: trigger an impulse on impact, decay it every
+// frame, and apply the returned offset via ctx.translate before drawing.
+export function triggerShake(shakeState, amount = 0.4) {
+  shakeState.trauma = clamp((shakeState.trauma ?? 0) + amount, 0, 1)
+}
+
+export function updateShake(shakeState, dt) {
+  shakeState.trauma = Math.max(0, (shakeState.trauma ?? 0) - dt * 1.8)
+  const t = shakeState.trauma
+  if (t <= 0) return { x: 0, y: 0 }
+  const power = t * t
+  return { x: rand(-1, 1) * 9 * power, y: rand(-1, 1) * 9 * power }
+}
