@@ -267,11 +267,11 @@ export default function FlameBattlersGame() {
     ctx.setLineDash([])
     ctx.restore()
 
-    // flame stacks (health as flame emoji count)
-    drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 30, 22)
-    for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * 16, 26)
-    drawEmoji(ctx, '🪵', s.aiFlame.x, s.aiFlame.y + 30, 22)
-    for (let i = 0; i < s.aiFlame.health; i++) drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - i * 16, 26)
+    // flame stacks (health as flame emoji count) — big and unmissable
+    drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 36, 30)
+    for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * 26, 52)
+    drawEmoji(ctx, '🪵', s.aiFlame.x, s.aiFlame.y + 36, 30)
+    for (let i = 0; i < s.aiFlame.health; i++) drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - i * 26, 52)
 
     // telegraph reticles
     for (const tg of s.telegraphs) {
