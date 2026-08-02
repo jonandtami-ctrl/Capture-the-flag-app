@@ -9,6 +9,7 @@ import { clamp, dist, drawEmoji, spawnBurst, updateAndDrawParticles } from './en
 const W = 800
 const H = 500
 const MAX_POWER = 420
+const MAX_PULL = 140
 const BASKET_R = 24
 
 const HOLES = [
@@ -68,7 +69,10 @@ export default function DiscGolfGame() {
 
   const onPointerDown = (e) => {
     if (phase !== 'aiming' || stateRef.current.flying) return
-    dragRef.current = getPos(e)
+    // Anchor the pull at the disc's actual rest position (not wherever the
+    // finger first landed) so grabbing anywhere near it still feels right.
+    dragRef.current = { x: stateRef.current.disc.x, y: stateRef.current.disc.y }
+    setAimLine({ from: dragRef.current, to: getPos(e) })
   }
   const onPointerMove = (e) => {
     if (!dragRef.current) return
@@ -80,9 +84,9 @@ export default function DiscGolfGame() {
     const s = stateRef.current
     const dx = dragRef.current.x - end.x
     const dy = dragRef.current.y - end.y
-    const pullDist = Math.min(Math.hypot(dx, dy), 140)
+    const pullDist = Math.min(Math.hypot(dx, dy), MAX_PULL)
     if (pullDist > 8) {
-      const power = (pullDist / 140) * MAX_POWER
+      const power = (pullDist / MAX_PULL) * MAX_POWER
       const d = Math.hypot(dx, dy) || 1
       s.vx = (dx / d) * power
       s.vy = (dy / d) * power
@@ -141,21 +145,67 @@ export default function DiscGolfGame() {
     ctx.globalAlpha = 1
 
     drawEmoji(ctx, '🥏', hole.tee.x, hole.tee.y, 22)
-    drawEmoji(ctx, '🥅', hole.basket.x, hole.basket.y, 34)
-    drawEmoji(ctx, '🥏', s.disc.x, s.disc.y, 24)
 
-    if (aimLine) {
+    // basket — glowing ring so it always reads clearly against the trees
+    ctx.save()
+    ctx.strokeStyle = 'rgba(249,88,26,0.55)'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(hole.basket.x, hole.basket.y, BASKET_R, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.restore()
+    drawEmoji(ctx, '🥅', hole.basket.x, hole.basket.y, 36)
+
+    // Pull-back mechanics: while dragging, the disc itself slides toward
+    // your finger (like stretching a slingshot) instead of staying put.
+    let discDrawX = s.disc.x
+    let discDrawY = s.disc.y
+
+    if (aimLine && !s.flying) {
+      const pdx = aimLine.to.x - aimLine.from.x
+      const pdy = aimLine.to.y - aimLine.from.y
+      const pullDist = Math.min(Math.hypot(pdx, pdy), MAX_PULL)
+      const angle = Math.atan2(pdy, pdx)
+      discDrawX = aimLine.from.x + Math.cos(angle) * pullDist
+      discDrawY = aimLine.from.y + Math.sin(angle) * pullDist
+
+      // rubber-band from the anchor to the pulled-back disc
       ctx.save()
-      ctx.strokeStyle = 'rgba(249,88,26,0.7)'
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'
       ctx.lineWidth = 3
       ctx.beginPath()
-      ctx.moveTo(s.disc.x, s.disc.y)
-      const dx = aimLine.from.x - aimLine.to.x
-      const dy = aimLine.from.y - aimLine.to.y
-      ctx.lineTo(s.disc.x + dx, s.disc.y + dy)
+      ctx.moveTo(aimLine.from.x, aimLine.from.y)
+      ctx.lineTo(discDrawX, discDrawY)
       ctx.stroke()
       ctx.restore()
+
+      // dashed trajectory preview shooting the opposite direction (launch dir)
+      const power = pullDist / MAX_PULL
+      ctx.save()
+      ctx.strokeStyle = `rgba(249,88,26,${0.4 + power * 0.4})`
+      ctx.lineWidth = 3
+      ctx.setLineDash([10, 8])
+      ctx.beginPath()
+      ctx.moveTo(aimLine.from.x, aimLine.from.y)
+      ctx.lineTo(aimLine.from.x - Math.cos(angle) * pullDist * 3, aimLine.from.y - Math.sin(angle) * pullDist * 3)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.restore()
+    } else if (phase === 'aiming' && !s.flying) {
+      // not dragging: a faint guide toward the hole so it's always findable
+      ctx.save()
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+      ctx.lineWidth = 2
+      ctx.setLineDash([6, 8])
+      ctx.beginPath()
+      ctx.moveTo(s.disc.x, s.disc.y)
+      ctx.lineTo(hole.basket.x, hole.basket.y)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.restore()
     }
+
+    drawEmoji(ctx, '🥏', discDrawX, discDrawY, 24)
 
     updateAndDrawParticles(ctx, s.particles, dt)
   }, true)
@@ -176,7 +226,7 @@ export default function DiscGolfGame() {
           show={phase === 'ready'}
           emoji="🥏"
           title="Pinecone Ridge — Quick Round"
-          subtitle="Click/tap and drag back from the disc, then release to throw — like a slingshot. Land in the basket in as few throws as possible over 3 holes."
+          subtitle="Land in the basket in as few throws as possible over 3 holes!"
           buttonLabel="Start round"
           onAction={start}
         />
@@ -197,7 +247,7 @@ export default function DiscGolfGame() {
           onAction={start}
         />
       </GameFrame>
-      <p className="mt-3 text-center text-xs text-forest-400/50">Drag back from the disc and release to throw</p>
+      <p className="mt-3 text-center text-xs text-forest-400/50">Pull back from the disc like a slingshot, then let go to launch it toward the basket</p>
     </div>
   )
 }

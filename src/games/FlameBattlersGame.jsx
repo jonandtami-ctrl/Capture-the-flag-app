@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -35,15 +36,23 @@ export default function FlameBattlersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [hp, setHp] = useState({ player: START_HEALTH, ai: START_HEALTH })
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
+  const winGame = () => {
+    setPhase('won')
+    const result = recordWin()
+    if (result.rankedUp) setRankUp(result.newRank)
+  }
+
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setHp({ player: START_HEALTH, ai: START_HEALTH })
@@ -83,7 +92,8 @@ export default function FlameBattlersGame() {
       s.timeLeft -= dt
       if (s.timeLeft <= 0) {
         s.timeLeft = 0
-        setPhase(s.playerFlame.health >= s.aiFlame.health ? 'won' : 'lost')
+        if (s.playerFlame.health >= s.aiFlame.health) winGame()
+        else setPhase('lost')
       }
 
       // player movement
@@ -154,7 +164,7 @@ export default function FlameBattlersGame() {
       }
 
       if (s.playerFlame.health <= 0) setPhase('lost')
-      if (s.aiFlame.health <= 0) setPhase('won')
+      if (s.aiFlame.health <= 0) winGame()
 
       hudAccum.current += dt
       if (hudAccum.current > 0.15) {
@@ -221,11 +231,11 @@ export default function FlameBattlersGame() {
           show={phase === 'ready'}
           emoji="🔥"
           title="Flame Battlers"
-          subtitle="Move with WASD/joystick to dodge, and tap/click anywhere to throw a water balloon at the enemy flame. Watch for the AI's targeting reticle on your own flame — stand in front of it to block the hit!"
+          subtitle="Douse the enemy flame before yours burns out!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -234,7 +244,9 @@ export default function FlameBattlersGame() {
           subtitle="Your squad doused the enemy fire first."
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="💧"

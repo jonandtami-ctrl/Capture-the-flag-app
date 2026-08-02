@@ -14,7 +14,10 @@ export default function useCanvasSize(canvasRef, width = 800, height = 500) {
 
     const resize = () => {
       const displayWidth = container.clientWidth
-      const displayHeight = Math.round(displayWidth * (height / width))
+      // Never let the canvas get so short that the start/win overlay text
+      // and button can't fit without scrolling — a fixed aspect ratio looks
+      // great on desktop but starves narrow phone screens of height.
+      const displayHeight = Math.max(360, Math.round(displayWidth * (height / width)))
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       canvas.width = width * dpr
       canvas.height = height * dpr

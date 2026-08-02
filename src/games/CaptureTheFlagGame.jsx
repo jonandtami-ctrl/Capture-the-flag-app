@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, dist, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -39,15 +40,17 @@ export default function CaptureTheFlagGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready') // ready | playing | won | lost
   const [carrying, setCarrying] = useState(false)
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setCarrying(false)
@@ -85,6 +88,8 @@ export default function CaptureTheFlagGame() {
       // Win: carrying flag back home
       if (s.player.carrying && s.player.x < W / 2 - 40 && dist(s.player, s.home) < 40) {
         setPhase('won')
+        const result = recordWin()
+        if (result.rankedUp) setRankUp(result.newRank)
       }
 
       // Defenders: patrol vs chase
@@ -183,11 +188,11 @@ export default function CaptureTheFlagGame() {
           show={phase === 'ready'}
           emoji="🚩"
           title="Capture the Flag"
-          subtitle="Sneak past the defenders (🥷), grab the enemy flag, and race it back to your side. WASD/arrows to move, or use the joystick on mobile."
+          subtitle="Grab the enemy flag and race it back home!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -196,7 +201,9 @@ export default function CaptureTheFlagGame() {
           subtitle={`You brought it home with ${timeLeft}s to spare.`}
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="⏰"

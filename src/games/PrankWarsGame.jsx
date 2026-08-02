@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -34,14 +35,16 @@ export default function PrankWarsGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setTimeLeft(stateRef.current.timeLeft)
@@ -96,6 +99,8 @@ export default function PrankWarsGame() {
 
       if (dist(s.player, TARGET) < CATCH_R) {
         setPhase('won')
+        const result = recordWin()
+        if (result.rankedUp) setRankUp(result.newRank)
       }
 
       hudAccum.current += dt
@@ -147,11 +152,11 @@ export default function PrankWarsGame() {
           show={phase === 'ready'}
           emoji="🪣"
           title="Prank Wars"
-          subtitle="Sneak up on the counselor without being seen moving. Watch for the 👀 warning before they turn around — freeze until they look away again."
+          subtitle="Sneak up on the counselor without being spotted moving!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -160,7 +165,9 @@ export default function PrankWarsGame() {
           subtitle={`You pulled it off with ${timeLeft}s to spare.`}
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="⏰"

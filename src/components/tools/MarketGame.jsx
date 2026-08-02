@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import useSound from '../../lib/useSound.js'
-import useRank from '../../lib/useRank.js'
-import RankSelector from '../../games/engine/RankSelector.jsx'
 
 const ASSET_TEMPLATES = [
   { id: 'gold', name: 'Gold', emoji: '🪙', volatility: 0.12 },
@@ -39,7 +37,6 @@ function portfolioValue(team, assets) {
 
 export default function MarketGame() {
   const [phase, setPhase] = useState('setup')
-  const [rank, setRank, ranks] = useRank()
   const [teamNames, setTeamNames] = useState(['You', 'Market Bot'])
   const [startingCash, setStartingCash] = useState(1000)
   const [totalRounds, setTotalRounds] = useState(6)
@@ -162,11 +159,11 @@ export default function MarketGame() {
     const id = setInterval(() => {
       for (const team of teams) {
         if (!team.name.toLowerCase().includes('bot')) continue
-        if (Math.random() > 0.4 + rank.speedMult * 0.2) continue
+        if (Math.random() > 0.5) continue
         const asset = assets[Math.floor(Math.random() * assets.length)]
         const wantsToBuy = Math.random() > 0.45
         if (wantsToBuy) {
-          const qty = Math.max(1, Math.floor((team.cash * 0.2 * rank.speedMult) / asset.price))
+          const qty = Math.max(1, Math.floor((team.cash * 0.2) / asset.price))
           if (qty > 0) executeBuy(team.id, asset.id, qty)
         } else {
           const held = team.holdings[asset.id] ?? 0
@@ -176,7 +173,7 @@ export default function MarketGame() {
     }, 1400)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, teams, assets, rank])
+  }, [running, teams, assets])
 
   const resetGame = () => {
     setPhase('setup')
@@ -256,10 +253,6 @@ export default function MarketGame() {
               className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-900/80 px-2 py-2 text-center text-white focus:border-forest-400/50 focus:outline-none"
             />
           </label>
-        </div>
-
-        <div className="mt-5 flex justify-center">
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
         </div>
 
         <button onClick={startGame} className="btn-primary mt-6 w-full">

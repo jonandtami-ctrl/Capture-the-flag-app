@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, dist, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -44,14 +45,16 @@ export default function DiamondSmugglersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setTimeLeft(stateRef.current.timeLeft)
@@ -96,6 +99,8 @@ export default function DiamondSmugglersGame() {
 
       if (dist(s.player, BUYER) < 40) {
         setPhase('won')
+        const result = recordWin()
+        if (result.rankedUp) setRankUp(result.newRank)
       }
 
       hudAccum.current += dt
@@ -147,11 +152,11 @@ export default function DiamondSmugglersGame() {
           show={phase === 'ready'}
           emoji="💎"
           title="Diamond Smugglers"
-          subtitle="Cross the dance floor to reach the buyer without getting caught in the police searchlight. WASD/arrows or joystick to move."
+          subtitle="Cross the floor and reach the buyer without getting caught!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -160,7 +165,9 @@ export default function DiamondSmugglersGame() {
           subtitle={`You made it with ${timeLeft}s to spare.`}
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="🚨"

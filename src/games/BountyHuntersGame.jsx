@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, dist, rand, steer, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -41,16 +42,24 @@ export default function BountyHuntersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
   const [caught, setCaught] = useState(0)
   const total = ALIASES.slice(0, 4).length
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
+  const winGame = () => {
+    setPhase('won')
+    const result = recordWin()
+    if (result.rankedUp) setRankUp(result.newRank)
+  }
+
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setCaught(0)
@@ -67,7 +76,8 @@ export default function BountyHuntersGame() {
       s.timeLeft -= dt
       if (s.timeLeft <= 0) {
         s.timeLeft = 0
-        setPhase(s.bounties.length === 0 ? 'won' : 'lost')
+        if (s.bounties.length === 0) winGame()
+        else setPhase('lost')
       }
 
       const kd = getDirection()
@@ -96,11 +106,8 @@ export default function BountyHuntersGame() {
         if (d < CATCH_R) {
           spawnBurst(s.particles, b.x, b.y, '#f9581a', 18)
           s.bounties.splice(i, 1)
-          setCaught((c) => {
-            const next = c + 1
-            if (next >= total) setPhase('won')
-            return next
-          })
+          setCaught((c) => c + 1)
+          if (s.bounties.length === 0) winGame()
         }
       }
 
@@ -152,11 +159,11 @@ export default function BountyHuntersGame() {
           show={phase === 'ready'}
           emoji="🎯"
           title="Bounty Hunters"
-          subtitle="Track down every hiding bounty and tag them before time's up — they'll bolt the moment they spot you coming. WASD/arrows or joystick to move."
+          subtitle="Catch every hiding bounty before time's up!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -165,7 +172,9 @@ export default function BountyHuntersGame() {
           subtitle={`Cleared the woods with ${timeLeft}s to spare.`}
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="⏰"

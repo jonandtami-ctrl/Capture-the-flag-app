@@ -6,7 +6,8 @@ import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import VirtualJoystick from './engine/VirtualJoystick.jsx'
-import RankSelector from './engine/RankSelector.jsx'
+import RankProgress from './engine/RankProgress.jsx'
+import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
 import { clamp, rand, drawEmoji, spawnBurst, updateAndDrawParticles } from './engine/utils.js'
 
@@ -35,7 +36,7 @@ export default function RaccoonRaidGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection, actionRef } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const [rank, setRank, ranks] = useRank()
+  const { rank, nextRank, winsToNext, recordWin } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
   const firedRef = useRef(false)
 
@@ -43,9 +44,11 @@ export default function RaccoonRaidGame() {
   const [lives, setLives] = useState(START_LIVES)
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
+  const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
 
   const start = () => {
+    setRankUp(null)
     const mult = { speed: rank.speedMult, time: rank.timeMult }
     stateRef.current = freshState(mult)
     setLives(START_LIVES)
@@ -71,6 +74,8 @@ export default function RaccoonRaidGame() {
       if (s.timeLeft <= 0) {
         s.timeLeft = 0
         setPhase('won')
+        const result = recordWin()
+        if (result.rankedUp) setRankUp(result.newRank)
       }
 
       // player horizontal movement
@@ -171,11 +176,11 @@ export default function RaccoonRaidGame() {
           show={phase === 'ready'}
           emoji="🦝"
           title="Raccoon Raid"
-          subtitle="Move left/right with A/D or arrows, then press Space or tap/click to fire your slingshot straight up. Don't let the raccoons reach the food stash!"
+          subtitle="Defend the food stash — don't let the raccoons get through!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankSelector ranks={ranks} value={rank} onChange={setRank} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -184,7 +189,9 @@ export default function RaccoonRaidGame() {
           subtitle={`You stopped ${score} raiders with ${lives} lives to spare.`}
           buttonLabel="Play again"
           onAction={start}
-        />
+        >
+          <RankUpBanner rank={rankUp} />
+        </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
           emoji="😱"
