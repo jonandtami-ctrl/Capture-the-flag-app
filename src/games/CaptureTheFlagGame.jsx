@@ -25,11 +25,11 @@ import {
 const W = 800
 const H = 500
 const PLAYER_SPEED = 230
-const AI_SPEED = 212
+const AI_SPEED = 190
 const PLAYER_R = 16
 const AI_R = 16
 const ROUND_SECONDS = 60
-const DEFENDER_SIGHT = 175
+const DEFENDER_SIGHT = 150
 
 function freshState(mult) {
   return {
@@ -41,7 +41,6 @@ function freshState(mult) {
       { x: W - 180, y: H / 2 - 90, home: { x: W - 180, y: H / 2 - 90 }, mode: 'patrol', wait: 0 },
       { x: W - 180, y: H / 2 + 90, home: { x: W - 180, y: H / 2 + 90 }, mode: 'patrol', wait: 0 },
       { x: W - 260, y: H / 2, home: { x: W - 260, y: H / 2 }, mode: 'patrol', wait: 0 },
-      { x: W - 100, y: H / 2, home: { x: W - 100, y: H / 2 }, mode: 'patrol', wait: 0 },
     ],
     particles: [],
     floatingText: [],
@@ -114,7 +113,7 @@ export default function CaptureTheFlagGame() {
         const seesPlayer = s.player.x > W / 2 - 20 && dist(d, s.player) < DEFENDER_SIGHT
         if (seesPlayer) {
           d.mode = 'chase'
-        } else if (d.mode === 'chase' && dist(d, s.player) > 240) {
+        } else if (d.mode === 'chase' && dist(d, s.player) > 220) {
           d.mode = 'patrol'
         }
 
