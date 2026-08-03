@@ -51,7 +51,7 @@ export default function RaccoonRaidGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection, actionRef } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const { rank, nextRank, winsToNext, recordWin } = useRank()
+  const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
   const firedRef = useRef(false)
 
@@ -64,7 +64,7 @@ export default function RaccoonRaidGame() {
 
   const start = () => {
     setRankUp(null)
-    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setLives(START_LIVES)
     setScore(0)
@@ -208,7 +208,7 @@ export default function RaccoonRaidGame() {
           buttonLabel="Start"
           onAction={start}
         >
-          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}

@@ -30,7 +30,7 @@ const AI_SPEED = 190
 const TEAMMATE_SPEED = 150
 const PLAYER_R = 16
 const AI_R = 16
-const ROUND_SECONDS = 60
+const ROUND_SECONDS = 90
 const DEFENDER_SIGHT = 150
 const TAG_R = PLAYER_R + AI_R
 const RAID_STUN = 2.2
@@ -66,7 +66,7 @@ export default function CaptureTheFlagGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const { rank, nextRank, winsToNext, recordWin } = useRank()
+  const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready') // ready | playing | won | lost
@@ -81,7 +81,7 @@ export default function CaptureTheFlagGame() {
     setRankUp(null)
     setLossReason('timeout')
     setRaidAlert(false)
-    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setCarrying(false)
     setTimeLeft(stateRef.current.timeLeft)
@@ -321,7 +321,7 @@ export default function CaptureTheFlagGame() {
           buttonLabel="Start"
           onAction={start}
         >
-          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}

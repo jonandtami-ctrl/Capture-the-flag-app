@@ -25,11 +25,17 @@ import {
 const W = 800
 const H = 500
 const CENTER = { x: W / 2, y: H / 2 }
-const RADIUS = 220
+const RADIUS = 280
 const SPEED = 220
-const ROUND_SECONDS = 75
-const START_HEALTH = 5
-const FLAME_STACK_GAP = 26
+const ATTACKER_SPEED = 150
+const ROUND_SECONDS = 90
+const START_HEALTH = 7
+const FLAME_STACK_GAP = 24
+const TELEGRAPH_TIME = 0.55
+// Standing this close to your own flame reliably blocks incoming balloons —
+// generous enough to cover the whole visible flame column (not a tiny spot
+// at its base), so guarding it feels like a real, learnable defense.
+const BLOCK_R = 46
 
 // The flame health stack is drawn as big 🔥 emoji rising above the flame's
 // anchor point (one per health, FLAME_STACK_GAP apart) — a throw should
@@ -61,21 +67,61 @@ function clampToArenaHalf(x, y, side, margin = 16) {
   return { x: nx, y: ny }
 }
 
+function freshAttacker(side, wanderRange, throwRange, mult) {
+  const baseX = side === 'right' ? CENTER.x + RADIUS - 90 : CENTER.x - RADIUS + 90
+  return {
+    x: baseX,
+    y: CENTER.y,
+    target: { x: baseX, y: CENTER.y },
+    wanderT: rand(...wanderRange),
+    throwCd: rand(...throwRange) / mult.speed,
+    throwRange,
+  }
+}
+
+// Wanders an AI-controlled attacker (enemy or teammate) around its half of
+// the arena and returns a new telegraph reticle whenever its throw cooldown
+// fires — shared by the enemy pair and your teammate so all three behave
+// consistently. Each attacker keeps its own throwRange (set at spawn) for
+// every reset, not just its first throw, so a deliberately slow teammate
+// doesn't speed up to enemy pace after her opening shot.
+function updateAttacker(attacker, side, targetFlame, dt, mult) {
+  const speed = ATTACKER_SPEED * mult.speed
+  attacker.wanderT -= dt
+  if (attacker.wanderT <= 0 || dist(attacker, attacker.target) < 12) {
+    const angle = rand(0, Math.PI * 2)
+    const r = rand(0, RADIUS - 50)
+    const baseX = side === 'right' ? CENTER.x + RADIUS - 90 : CENTER.x - RADIUS + 90
+    attacker.target = clampToArenaHalf(baseX + Math.cos(angle) * r * 0.4, CENTER.y + Math.sin(angle) * r, side)
+    attacker.wanderT = rand(0.8, 1.8)
+  }
+  const toTarget = Math.atan2(attacker.target.y - attacker.y, attacker.target.x - attacker.x)
+  const moved = clampToArenaHalf(attacker.x + Math.cos(toTarget) * speed * dt, attacker.y + Math.sin(toTarget) * speed * dt, side)
+  attacker.x = moved.x
+  attacker.y = moved.y
+
+  attacker.throwCd -= dt
+  if (attacker.throwCd <= 0) {
+    attacker.throwCd = rand(...attacker.throwRange) / mult.speed
+    return { x: targetFlame.x + rand(-18, 18), y: targetFlame.y + rand(-18, 18) }
+  }
+  return null
+}
+
 function freshState(mult) {
   return {
     mult,
-    player: { x: CENTER.x - RADIUS + 90, y: CENTER.y },
-    ai: {
-      x: CENTER.x + RADIUS - 90,
-      y: CENTER.y,
-      target: { x: CENTER.x + RADIUS - 90, y: CENTER.y },
-      wanderT: rand(0.5, 1.5),
-      throwCd: rand(0.6, 1.2) / mult.speed,
-    },
+    player: { x: CENTER.x - RADIUS + 90, y: CENTER.y - 60 },
+    // Your teammate throws slowly — she's backup, not a substitute for
+    // actually playing. Your own throws (no cooldown, aimed by hand) are
+    // what should carry the fight.
+    teammate: freshAttacker('left', [0.5, 1.5], [3.5, 5.5], mult),
+    ai: freshAttacker('right', [0.5, 1.5], [0.6, 1.2], mult),
+    ai2: freshAttacker('right', [0.7, 1.7], [0.9, 1.6], mult),
     playerFlame: { x: CENTER.x - RADIUS + 30, y: CENTER.y, health: START_HEALTH },
     aiFlame: { x: CENTER.x + RADIUS - 30, y: CENTER.y, health: START_HEALTH },
-    balloons: [], // {x,y,tx,ty,speed,from:'player'|'ai'}
-    telegraphs: [], // {x,y,t}
+    balloons: [], // {x,y,tx,ty,duration,team:'player'|'enemy'}
+    telegraphs: [], // {x,y,t,team,origin}
     particles: [],
     floatingText: [],
     shake: { trauma: 0 },
@@ -88,7 +134,7 @@ export default function FlameBattlersGame() {
   const { containerRef, width, height } = useCanvasSize(canvasRef, W, H)
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
-  const { rank, nextRank, winsToNext, recordWin } = useRank()
+  const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
@@ -105,7 +151,7 @@ export default function FlameBattlersGame() {
 
   const start = () => {
     setRankUp(null)
-    const mult = { speed: rank.speedMult, time: rank.timeMult }
+    const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setHp({ player: START_HEALTH, ai: START_HEALTH })
     setTimeLeft(stateRef.current.timeLeft)
@@ -122,7 +168,7 @@ export default function FlameBattlersGame() {
       ty: logicalY,
       t: 0,
       duration: dist(s.player, { x: logicalX, y: logicalY }) / 420,
-      from: 'player',
+      team: 'player',
     })
   }
 
@@ -156,43 +202,27 @@ export default function FlameBattlersGame() {
       s.player.x = nextPlayer.x
       s.player.y = nextPlayer.y
 
-      // AI wander — roams its whole half of the arena, not just a strip,
-      // so its position (and incoming balloons) is harder to predict
-      const aiSpeed = 150 * s.mult.speed
-      s.ai.wanderT -= dt
-      if (s.ai.wanderT <= 0 || dist(s.ai, s.ai.target) < 12) {
-        const angle = rand(0, Math.PI * 2)
-        const r = rand(0, RADIUS - 50)
-        s.ai.target = clampToArenaHalf(CENTER.x + RADIUS - 90 + Math.cos(angle) * r * 0.4, CENTER.y + Math.sin(angle) * r, 'right')
-        s.ai.wanderT = rand(0.8, 1.8)
-      }
-      const toTarget = Math.atan2(s.ai.target.y - s.ai.y, s.ai.target.x - s.ai.x)
-      const moved = clampToArenaHalf(s.ai.x + Math.cos(toTarget) * aiSpeed * dt, s.ai.y + Math.sin(toTarget) * aiSpeed * dt, 'right')
-      s.ai.x = moved.x
-      s.ai.y = moved.y
+      // AI pair + your teammate all wander their half and throw on cadence
+      const reticleAi = updateAttacker(s.ai, 'right', s.playerFlame, dt, s.mult)
+      if (reticleAi) s.telegraphs.push({ ...reticleAi, t: TELEGRAPH_TIME, team: 'enemy', origin: s.ai })
+      const reticleAi2 = updateAttacker(s.ai2, 'right', s.playerFlame, dt, s.mult)
+      if (reticleAi2) s.telegraphs.push({ ...reticleAi2, t: TELEGRAPH_TIME, team: 'enemy', origin: s.ai2 })
+      const reticleTeam = updateAttacker(s.teammate, 'left', s.aiFlame, dt, s.mult)
+      if (reticleTeam) s.telegraphs.push({ ...reticleTeam, t: TELEGRAPH_TIME, team: 'player', origin: s.teammate })
 
-      // AI throw cadence with telegraph — faster and less predictable now
-      s.ai.throwCd -= dt
-      if (s.ai.throwCd <= 0) {
-        s.ai.throwCd = rand(0.9, 1.7) / s.mult.speed
-        const tx = s.playerFlame.x + rand(-18, 18)
-        const ty = s.playerFlame.y + rand(-18, 18)
-        s.telegraphs.push({ x: tx, y: ty, t: 0.4 })
-      }
-
-      // resolve telegraphs -> spawn AI balloons
+      // resolve telegraphs -> spawn balloons from whichever attacker threw them
       for (let i = s.telegraphs.length - 1; i >= 0; i--) {
         const tg = s.telegraphs[i]
         tg.t -= dt
         if (tg.t <= 0) {
           s.balloons.push({
-            x: s.ai.x,
-            y: s.ai.y,
+            x: tg.origin.x,
+            y: tg.origin.y,
             tx: tg.x,
             ty: tg.y,
             t: 0,
-            duration: dist(s.ai, { x: tg.x, y: tg.y }) / (420 * s.mult.speed),
-            from: 'ai',
+            duration: dist(tg.origin, { x: tg.x, y: tg.y }) / (420 * s.mult.speed),
+            team: tg.team,
           })
           s.telegraphs.splice(i, 1)
         }
@@ -206,11 +236,12 @@ export default function FlameBattlersGame() {
         b.cx = b.x + (b.tx - b.x) * p
         b.cy = b.y + (b.ty - b.y) * p
         if (p >= 1) {
-          if (b.from === 'ai') {
-            // does it hit the player (blocked) or the flame?
-            if (dist(s.player, { x: b.tx, y: b.ty }) < 26) {
+          if (b.team === 'enemy') {
+            // blocked if you OR your teammate are guarding the flame
+            const blocked = dist(s.player, s.playerFlame) < BLOCK_R || dist(s.teammate, s.playerFlame) < BLOCK_R
+            if (blocked) {
               spawnBurst(s.particles, b.tx, b.ty, '#67e8f9', 10)
-              spawnFloatingText(s.floatingText, b.tx, b.ty - 20, 'DODGED!', '#7dd3fc', 15)
+              spawnFloatingText(s.floatingText, b.tx, b.ty - 20, 'BLOCKED!', '#7dd3fc', 15)
             } else {
               s.playerFlame.health = Math.max(0, s.playerFlame.health - 1)
               spawnBurst(s.particles, s.playerFlame.x, s.playerFlame.y, '#ff7a3d', 14)
@@ -278,6 +309,18 @@ export default function FlameBattlersGame() {
     ctx.setLineDash([])
     ctx.restore()
 
+    // guard zone — stand inside this ring to block incoming balloons
+    const guarding = dist(s.player, s.playerFlame) < BLOCK_R || dist(s.teammate, s.playerFlame) < BLOCK_R
+    ctx.save()
+    ctx.strokeStyle = guarding ? 'rgba(125,211,252,0.6)' : 'rgba(125,211,252,0.22)'
+    ctx.lineWidth = guarding ? 3 : 2
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.arc(s.playerFlame.x, s.playerFlame.y, BLOCK_R, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+
     // flame stacks (health as flame emoji count) — big and unmissable
     drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 36, 30)
     for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * FLAME_STACK_GAP, 52)
@@ -300,6 +343,8 @@ export default function FlameBattlersGame() {
 
     // characters
     drawEmoji(ctx, '🧍', s.ai.x, s.ai.y, 30)
+    drawEmoji(ctx, '🧍‍♀️', s.ai2.x, s.ai2.y, 30)
+    drawEmoji(ctx, '👩‍🚒', s.teammate.x, s.teammate.y, 30)
     drawEmoji(ctx, '🧑‍🚒', s.player.x, s.player.y, 30)
 
     updateAndDrawParticles(ctx, s.particles, dt)
@@ -326,11 +371,11 @@ export default function FlameBattlersGame() {
           show={phase === 'ready'}
           emoji="🔥"
           title="Flame Battlers"
-          subtitle="Douse the enemy flame before yours burns out!"
+          subtitle="You and your teammate face off against two enemy throwers. Douse their flame before yours burns out — stand inside the dashed ring around your own flame to block incoming balloons!"
           buttonLabel="Start"
           onAction={start}
         >
-          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} />
+          <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -351,7 +396,7 @@ export default function FlameBattlersGame() {
           onAction={start}
         />
       </GameFrame>
-      <p className="mt-3 text-center text-xs text-forest-400/50">Move to dodge · tap/click to throw a balloon</p>
+      <p className="mt-3 text-center text-xs text-forest-400/50">Move to dodge · tap/click to throw a balloon · guard the dashed ring around your flame to block</p>
     </div>
   )
 }
