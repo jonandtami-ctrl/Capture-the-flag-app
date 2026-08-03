@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-cream text-charcoal antialiased;
+}
+
+@layer utilities {
+  .container-page {
+    @apply mx-auto w-full max-w-8xl px-6 sm:px-8 lg:px-12;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-forest px-8 py-4 text-sm font-semibold tracking-wide text-cream shadow-soft transition-all duration-300 hover:bg-forest-light hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-full border-2 border-forest bg-transparent px-8 py-4 text-sm font-semibold tracking-wide text-forest transition-all duration-300 hover:bg-forest hover:text-cream hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+  }
+
+  .btn-primary-inverse {
+    @apply inline-flex items-center justify-center rounded-full bg-gold px-8 py-4 text-sm font-semibold tracking-wide text-forest-dark shadow-soft transition-all duration-300 hover:bg-gold-light hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream;
+  }
+
+  .btn-secondary-inverse {
+    @apply inline-flex items-center justify-center rounded-full border-2 border-cream bg-transparent px-8 py-4 text-sm font-semibold tracking-wide text-cream transition-all duration-300 hover:bg-cream hover:text-forest-dark hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+  }
+
+  .eyebrow {
+    @apply text-sm font-semibold uppercase tracking-[0.2em] text-gold-dark;
+  }
+
+  .card {
+    @apply rounded-3xl border border-beige-dark/40 bg-white/70 p-8 shadow-card backdrop-blur-sm;
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
