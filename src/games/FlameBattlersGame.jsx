@@ -29,6 +29,17 @@ const RADIUS = 220
 const SPEED = 220
 const ROUND_SECONDS = 75
 const START_HEALTH = 5
+const FLAME_STACK_GAP = 26
+
+// The flame health stack is drawn as big 🔥 emoji rising above the flame's
+// anchor point (one per health, FLAME_STACK_GAP apart) — a throw should
+// register anywhere on that visible column, not just a small circle at its
+// base, or landing on the flame you can clearly see will still read as a miss.
+function hitsFlameStack(px, py, flame) {
+  const dx = Math.abs(px - flame.x)
+  const dy = py - flame.y
+  return dx < 34 && dy > -(FLAME_STACK_GAP * (START_HEALTH - 1) + 34) && dy < 34
+}
 
 // Keeps an entity inside the circular arena AND on its own side of the
 // center line — projecting radially toward the center preserves which
@@ -207,7 +218,7 @@ export default function FlameBattlersGame() {
               triggerShake(s.shake, 0.3)
               setHp((h) => ({ ...h, player: s.playerFlame.health }))
             }
-          } else if (dist(s.aiFlame, { x: b.tx, y: b.ty }) < 30) {
+          } else if (hitsFlameStack(b.tx, b.ty, s.aiFlame)) {
             s.aiFlame.health = Math.max(0, s.aiFlame.health - 1)
             spawnBurst(s.particles, s.aiFlame.x, s.aiFlame.y, '#43cc86', 14)
             spawnFloatingText(s.floatingText, s.aiFlame.x, s.aiFlame.y - 30, 'HIT! -1 🔥', '#43cc86', 18)
@@ -269,9 +280,9 @@ export default function FlameBattlersGame() {
 
     // flame stacks (health as flame emoji count) — big and unmissable
     drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 36, 30)
-    for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * 26, 52)
+    for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * FLAME_STACK_GAP, 52)
     drawEmoji(ctx, '🪵', s.aiFlame.x, s.aiFlame.y + 36, 30)
-    for (let i = 0; i < s.aiFlame.health; i++) drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - i * 26, 52)
+    for (let i = 0; i < s.aiFlame.health; i++) drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - i * FLAME_STACK_GAP, 52)
 
     // telegraph reticles
     for (const tg of s.telegraphs) {
