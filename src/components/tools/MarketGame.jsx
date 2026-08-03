@@ -27,6 +27,53 @@ function nextPrice(asset) {
   return Math.max(5, Math.round(asset.price * (1 + change)))
 }
 
+// Flavor headlines explaining why a price moved — a few asset-specific jokes
+// per direction, topped up with generic ones so there's always variety.
+const ASSET_NEWS = {
+  gold: {
+    up: ['Investors flee to gold as a safe haven amid market jitters.', 'A central bank quietly built up its reserves.'],
+    down: ["A shipwreck full of gold coins washed ashore and flooded the market.", "Crypto stole gold's spotlight again."],
+  },
+  tech: {
+    up: ['Their app went viral overnight.', 'A tech giant hinted at buying them out.'],
+    down: ['A buggy update crashed thousands of phones.', "The founder tweeted something... unfortunate."],
+  },
+  oil: {
+    up: ['A pipeline hiccup tightened supply.', 'Winter driving season kicked off early.'],
+    down: ['A surprise stockpile report flooded the market.', 'A battery breakthrough made headlines.'],
+  },
+  crypto: {
+    up: ['A meme coin pump dragged the whole market up.', 'A billionaire tweeted a rocket emoji.'],
+    down: ['An exchange got hacked. Again.', 'Regulators hinted at a crackdown.'],
+  },
+  realestate: {
+    up: ['Interest rates dipped and buyers rushed in.', 'A tiny house went viral on social media.'],
+    down: ['A surprise zoning law spooked developers.', 'Interest rates ticked back up.'],
+  },
+}
+const GENERIC_NEWS = {
+  up: [
+    'Investors piled in after surprisingly strong earnings.',
+    'Analysts upgraded their outlook to "to the moon."',
+    'A buyout rumor sent buyers scrambling.',
+    'Everyone FOMO\'d in after seeing the last five minutes of gains.',
+  ],
+  down: [
+    'A shaky earnings report spooked investors.',
+    'Profit-takers cashed out all at once.',
+    'An analyst downgrade triggered a mini panic.',
+    'Rumors of a supply glut sent prices sliding.',
+  ],
+}
+
+function newsFor(asset, direction, usedLines) {
+  const pool = [...(ASSET_NEWS[asset.id]?.[direction] ?? []), ...GENERIC_NEWS[direction]]
+  const fresh = pool.filter((line) => !usedLines.has(line))
+  const choice = (fresh.length > 0 ? fresh : pool)[Math.floor(Math.random() * (fresh.length > 0 ? fresh.length : pool.length))]
+  usedLines.add(choice)
+  return choice
+}
+
 function portfolioValue(team, assets) {
   const holdingsValue = Object.entries(team.holdings).reduce((sum, [assetId, qty]) => {
     const asset = assets.find((a) => a.id === assetId)
@@ -49,15 +96,23 @@ export default function MarketGame() {
   const [running, setRunning] = useState(false)
   const [trade, setTrade] = useState({})
   const [lastRoundValues, setLastRoundValues] = useState({})
+  const [news, setNews] = useState([])
   const intervalRef = useRef(null)
   const sound = useSound()
 
   const advanceRound = () => {
     setAssets((prev) => {
+      const headlines = []
+      const usedLines = new Set()
       const updated = prev.map((a) => {
         const price = nextPrice(a)
+        if (price !== a.price) {
+          const direction = price > a.price ? 'up' : 'down'
+          headlines.push(`${a.emoji} ${a.name} ${direction === 'up' ? '▲' : '▼'} — ${newsFor(a, direction, usedLines)}`)
+        }
         return { ...a, price, history: [...a.history, price] }
       })
+      setNews(headlines)
       setTeams((teamsNow) => {
         setLastRoundValues(Object.fromEntries(teamsNow.map((t) => [t.id, portfolioValue(t, prev)])))
         return teamsNow
@@ -96,6 +151,9 @@ export default function MarketGame() {
         name,
         cash: Number(startingCash) || 1000,
         holdings: {},
+        // Decided once at kickoff so a bot stays a bot even if nobody
+        // rechecks its name later — fixes bot trades silently going stale.
+        isBot: name.toLowerCase().includes('bot'),
       })),
     )
     setAssets(freshAssets())
@@ -103,6 +161,7 @@ export default function MarketGame() {
     setRemaining(Number(roundSeconds) || 90)
     setRunning(false)
     setLastRoundValues({})
+    setNews([])
     setPhase('playing')
     sound.start()
   }
@@ -116,9 +175,8 @@ export default function MarketGame() {
     setTrade((prev) => ({ ...prev, [teamId]: { ...prev[teamId], [field]: value } }))
   }
 
-  const executeBuy = (teamId, assetId, quantity) => {
-    const asset = assets.find((a) => a.id === assetId)
-    const cost = asset.price * quantity
+  const executeBuy = (teamId, assetId, price, quantity) => {
+    const cost = price * quantity
     setTeams((prev) =>
       prev.map((t) => {
         if (t.id !== teamId || t.cash < cost) return t
@@ -131,15 +189,14 @@ export default function MarketGame() {
     )
   }
 
-  const executeSell = (teamId, assetId, quantity) => {
-    const asset = assets.find((a) => a.id === assetId)
+  const executeSell = (teamId, assetId, price, quantity) => {
     setTeams((prev) =>
       prev.map((t) => {
         const held = t.holdings[assetId] ?? 0
         if (t.id !== teamId || held < quantity) return t
         return {
           ...t,
-          cash: t.cash + asset.price * quantity,
+          cash: t.cash + price * quantity,
           holdings: { ...t.holdings, [assetId]: held - quantity },
         }
       }),
@@ -148,39 +205,48 @@ export default function MarketGame() {
 
   const buy = (teamId) => {
     const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
-    executeBuy(teamId, assetId, Math.max(1, Number(qty)))
+    const asset = assets.find((a) => a.id === assetId)
+    executeBuy(teamId, assetId, asset.price, Math.max(1, Number(qty)))
     sound.point()
   }
 
   const sell = (teamId) => {
     const { assetId = assets[0].id, qty = 1 } = trade[teamId] ?? {}
-    executeSell(teamId, assetId, Math.max(1, Number(qty)))
+    const asset = assets.find((a) => a.id === assetId)
+    executeSell(teamId, assetId, asset.price, Math.max(1, Number(qty)))
     sound.point()
   }
 
-  // Bot teams (name contains "Bot") make a small random trade roughly every
-  // couple of seconds while a round is running, so single-player mode has
-  // something to compete against.
+  // Bot teams make a small random trade roughly every couple of seconds
+  // whenever the market is open, so single-player mode has something to
+  // compete against. Reads teams/assets from a ref instead of depending on
+  // them directly — depending on them meant the interval was torn down and
+  // restarted on every single trade (bot or human), which could keep
+  // resetting its own countdown before it ever fired.
+  const liveRef = useRef({ teams, assets, round, totalRounds })
+  liveRef.current = { teams, assets, round, totalRounds }
+
   useEffect(() => {
-    if (!running) return
+    if (phase !== 'playing') return
     const id = setInterval(() => {
-      for (const team of teams) {
-        if (!team.name.toLowerCase().includes('bot')) continue
+      const { teams: liveTeams, assets: liveAssets, round: liveRound, totalRounds: liveTotalRounds } = liveRef.current
+      if (liveRound > liveTotalRounds) return
+      for (const team of liveTeams) {
+        if (!team.isBot) continue
         if (Math.random() > 0.5) continue
-        const asset = assets[Math.floor(Math.random() * assets.length)]
+        const asset = liveAssets[Math.floor(Math.random() * liveAssets.length)]
         const wantsToBuy = Math.random() > 0.45
         if (wantsToBuy) {
           const qty = Math.max(1, Math.floor((team.cash * 0.2) / asset.price))
-          if (qty > 0) executeBuy(team.id, asset.id, qty)
+          if (qty > 0) executeBuy(team.id, asset.id, asset.price, qty)
         } else {
           const held = team.holdings[asset.id] ?? 0
-          if (held > 0) executeSell(team.id, asset.id, Math.max(1, Math.floor(held * 0.5)))
+          if (held > 0) executeSell(team.id, asset.id, asset.price, Math.max(1, Math.floor(held * 0.5)))
         }
       }
     }, 1400)
     return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, teams, assets])
+  }, [phase])
 
   const resetGame = () => {
     setPhase('setup')
@@ -324,6 +390,18 @@ export default function MarketGame() {
           )
         })}
       </div>
+
+      {/* Market news */}
+      {news.length > 0 && (
+        <div className="mt-4 rounded-xl border border-white/10 bg-dusk-900/60 p-4">
+          <h4 className="font-display text-sm text-white">📰 Market News</h4>
+          <ul className="mt-2 space-y-1 text-xs text-forest-200/70">
+            {news.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Teams */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
