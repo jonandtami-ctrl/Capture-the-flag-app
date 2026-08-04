@@ -25,7 +25,9 @@ import {
 const W = 800
 const H = 500
 const PLAYER_START = { x: 70, y: H - 60 }
-const BUYER = { x: W - 70, y: 60 }
+// Kept clear of the HUD's top-right timer chip, which otherwise sits right
+// on top of a buyer placed at the very top edge.
+const BUYER = { x: W - 90, y: 130 }
 const PLAYER_SPEED = 210
 const ROUND_SECONDS = 60
 const TARGET_DELIVERIES = 5

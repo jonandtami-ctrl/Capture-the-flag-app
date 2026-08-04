@@ -1,6 +1,5 @@
 // Central catalog of camp games. Each game is self-contained so pages can
 // render rules + tools generically off this data.
-import { totalPar as discGolfTotalPar } from './discGolfCourse.js'
 
 export const games = [
   {
@@ -284,75 +283,6 @@ export const games = [
       'Golden food — one item on the stash is worth triple points if smuggled out successfully.',
     ],
     tools: ['teams', 'timer', 'scoreboard'],
-  },
-  {
-    slug: 'disc-golf',
-    name: 'Disc Golf',
-    tagline: `Pinecone Ridge — an 18-hole wooded course, playable as a quick 3-hole round or the full 18.`,
-    emoji: '🥏',
-    theme: 'forest',
-    category: 'Court Games',
-    players: '1 (vs. par)',
-    duration: '~2 min quick round',
-    energy: 'Low',
-    howToPlay: {
-      objective: 'Get your disc into the basket in as few throws as possible across 3 holes.',
-      controls: 'Click/tap and drag back from the disc, then release — like a slingshot',
-      win: `Finish all 3 holes. Trees stop your disc on contact, so aim around them. (The full course is ${discGolfTotalPar}-par over 18 holes — use the scorecard below to play the real thing.)`,
-    },
-    equipment: ['Discs (a driver, mid-range, and putter per player)', '18 tee markers', 'Baskets or DIY targets (a bucket, a hula hoop, a tree trunk)'],
-    setup: [
-      'Walk the course in advance and mark each tee and target with the hole info.',
-      'Each player needs at least one disc — a mid-range or putter is easiest for beginners.',
-      'Play holes in order — throw from the tee, then throw again from wherever your disc lands, until it hits the target.',
-    ],
-    rules: [
-      'Count every throw it takes to hit the target on each hole — that\'s your score for the hole.',
-      'Always throw from directly behind where your previous disc landed.',
-      'Log your strokes per hole on the Scorecard tool as you go — it tracks your running total and score vs. par automatically.',
-      'Lowest total strokes after 18 holes wins the course.',
-    ],
-    variants: [
-      'Ace race — bonus prize for anyone who scores a hole-in-one.',
-      'Best shot scramble — play in teams, everyone throws, the team plays their best-placed disc each turn.',
-      'Night round — glow discs after dark for a completely different course experience.',
-    ],
-    tools: ['discgolf'],
-  },
-  {
-    slug: 'fishing-derby',
-    name: 'Camp Fishing Derby',
-    tagline: 'Cast, wait for the bite, and reel it in at just the right moment.',
-    emoji: '🎣',
-    theme: 'forest',
-    category: 'Exploration',
-    players: '1+ (pass and play)',
-    duration: '~30 sec per cast',
-    energy: 'Low',
-    howToPlay: {
-      objective: 'Time your reel to land the biggest catch you can.',
-      controls: 'Click/tap "Cast Line", then "Reel!" the instant something bites',
-      win: 'There\'s no fixed finish line — chase the high score and try to land "The Big One."',
-    },
-    equipment: ['A fishing spot — dock, pond edge, or riverbank', 'Rods (optional if you want the real-life version alongside this)'],
-    setup: [
-      'Pick your fishing spot and get anglers lined up.',
-      'Open the Cast & Catch tool below and add each angler\'s name.',
-      'Take turns casting — pass the device to the next angler after each catch.',
-    ],
-    rules: [
-      'Cast your line, then wait for a bite.',
-      'Reel in the instant you see the bite — too early or too late and it gets away.',
-      'Bigger, rarer fish are worth more points; watch for "The Big One."',
-      'Whoever has the most points (or the single biggest catch) when you\'re done fishing wins the derby.',
-    ],
-    variants: [
-      'Biggest single catch wins instead of total points.',
-      'Team derby — anglers fish for a shared team total.',
-      'Speed round — 60 seconds, as many casts as you can land.',
-    ],
-    tools: ['fishing'],
-    hideCompanionTools: true,
   },
 ]
 

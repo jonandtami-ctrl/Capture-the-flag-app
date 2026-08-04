@@ -37,6 +37,15 @@ const RAID_STUN = 2.2
 const MY_FLAG = { x: 150, y: H / 2 }
 const AI_SCORE_POINT = { x: W - 40, y: H / 2 }
 const TREE_R = 16
+const MARSHMALLOW_R = 22
+const MARSHMALLOW_RESPAWN = 16
+const MARSHMALLOW_SPOTS = [
+  { x: 260, y: 150 },
+  { x: 260, y: 350 },
+]
+const SPEED_BOOST_TIME = 2
+const INVINCIBLE_TIME = 1
+const SPEED_BOOST_MULT = 1.6
 
 // Keep-clear circles around spawn points, flags, and home so the maze never
 // seals off somewhere the game depends on being reachable.
@@ -49,30 +58,47 @@ const RESERVED_ZONES = [
   { x: W - 180, y: H / 2 - 90, r: 45 },
   { x: W - 180, y: H / 2 + 90, r: 45 },
   { x: W - 260, y: H / 2, r: 45 },
+  ...MARSHMALLOW_SPOTS.map((p) => ({ x: p.x, y: p.y, r: 34 })),
 ]
 
 // A deterministic scatter of trees across the arena — enough to break
 // sightlines and force weaving through real lanes, without packing so
 // tight it reads as a solid thicket. Fixed pattern (no Math.random) so the
 // layout is stable and never seals off a reserved zone or a way across.
+// The enemy half is noticeably denser than yours — more places to duck out
+// of sight while you're sneaking toward their flag.
 const TREES = (() => {
   const trees = []
+  const tryAdd = (tx, ty) => {
+    if (RESERVED_ZONES.some((z) => Math.hypot(tx - z.x, ty - z.y) < z.r)) return
+    if (trees.some((t) => Math.hypot(tx - t.x, ty - t.y) < TREE_R * 1.9)) return
+    trees.push({ x: tx, y: ty, r: TREE_R })
+  }
+
+  // Your side: moderate cover.
   let col = 0
-  for (let x = 120; x <= 680; x += 65) {
+  for (let x = 120; x < W / 2; x += 65) {
     let row = 0
     for (let y = 50; y <= 450; y += 65) {
       col++
       row++
-      // Skip roughly a third of cells (fixed pattern) so real lanes survive.
       if ((col * 5 + row * 3) % 3 === 0) continue
-      const jitterX = ((col * 17) % 27) - 13
-      const jitterY = ((row * 23) % 27) - 13
-      const tx = x + jitterX
-      const ty = y + jitterY
-      if (RESERVED_ZONES.some((z) => Math.hypot(tx - z.x, ty - z.y) < z.r)) continue
-      trees.push({ x: tx, y: ty, r: TREE_R })
+      tryAdd(x + (((col * 17) % 27) - 13), y + (((row * 23) % 27) - 13))
     }
   }
+
+  // Enemy side: tighter grid, lower skip rate — real thickets to hide in.
+  col = 0
+  for (let x = W / 2; x <= 690; x += 48) {
+    let row = 0
+    for (let y = 45; y <= 455; y += 48) {
+      col++
+      row++
+      if ((col * 7 + row * 5) % 4 === 0) continue
+      tryAdd(x + (((col * 13) % 21) - 10), y + (((row * 19) % 21) - 10))
+    }
+  }
+
   return trees
 })()
 
@@ -112,7 +138,7 @@ function hasLineOfSight(a, b) {
 function freshState(mult) {
   return {
     mult,
-    player: { x: 90, y: H / 2, carrying: false, tagFlashT: 0 },
+    player: { x: 90, y: H / 2, carrying: false, tagFlashT: 0, speedBoostT: 0, invincibleT: 0 },
     home: { x: 60, y: H / 2 },
     myFlag: { x: MY_FLAG.x, y: MY_FLAG.y, taken: false },
     enemyFlag: { x: W - 60, y: H / 2, taken: false },
@@ -121,10 +147,8 @@ function freshState(mult) {
       { x: W - 180, y: H / 2 + 90, home: { x: W - 180, y: H / 2 + 90 }, mode: 'patrol', wait: 0, raiding: false, carrying: false, stunT: 0 },
       { x: W - 260, y: H / 2, home: { x: W - 260, y: H / 2 }, mode: 'patrol', wait: 0, raiding: false, carrying: false, stunT: 0 },
     ],
-    teammates: [
-      { x: MY_FLAG.x - 20, y: H / 2 - 80, wanderT: 0 },
-      { x: MY_FLAG.x - 20, y: H / 2 + 80, wanderT: 0 },
-    ],
+    teammates: [{ x: MY_FLAG.x - 20, y: H / 2, wanderT: 0 }],
+    marshmallows: MARSHMALLOW_SPOTS.map((p) => ({ x: p.x, y: p.y, available: true, respawnT: 0 })),
     raidCd: rand(4, 7),
     particles: [],
     floatingText: [],
@@ -147,12 +171,16 @@ export default function CaptureTheFlagGame() {
   const [rankUp, setRankUp] = useState(null)
   const [lossReason, setLossReason] = useState('timeout')
   const [raidAlert, setRaidAlert] = useState(false)
+  const [boosted, setBoosted] = useState(false)
+  const [invincible, setInvincible] = useState(false)
   const hudAccum = useRef(0)
 
   const start = () => {
     setRankUp(null)
     setLossReason('timeout')
     setRaidAlert(false)
+    setBoosted(false)
+    setInvincible(false)
     const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setCarrying(false)
@@ -172,14 +200,36 @@ export default function CaptureTheFlagGame() {
         setPhase('lost')
       }
 
+      if (s.player.speedBoostT > 0) s.player.speedBoostT -= dt
+      if (s.player.invincibleT > 0) s.player.invincibleT -= dt
+
       // Player movement: keyboard direction takes priority, else joystick
       const kd = getDirection()
       const dx = kd.x !== 0 || kd.y !== 0 ? kd.x : joyRef.current.x
       const dy = kd.x !== 0 || kd.y !== 0 ? kd.y : joyRef.current.y
-      s.player.x = clamp(s.player.x + dx * PLAYER_SPEED * dt, PLAYER_R, W - PLAYER_R)
-      s.player.y = clamp(s.player.y + dy * PLAYER_SPEED * dt, PLAYER_R, H - PLAYER_R)
+      const moveSpeed = PLAYER_SPEED * (s.player.speedBoostT > 0 ? SPEED_BOOST_MULT : 1)
+      s.player.x = clamp(s.player.x + dx * moveSpeed * dt, PLAYER_R, W - PLAYER_R)
+      s.player.y = clamp(s.player.y + dy * moveSpeed * dt, PLAYER_R, H - PLAYER_R)
       resolveTreeCollisions(s.player, PLAYER_R)
       if (s.player.tagFlashT > 0) s.player.tagFlashT -= dt
+
+      // Marshmallow power-ups: fast for 2s, invincible for 1s
+      for (const m of s.marshmallows) {
+        if (m.available) {
+          if (dist(s.player, m) < MARSHMALLOW_R) {
+            m.available = false
+            m.respawnT = MARSHMALLOW_RESPAWN
+            s.player.speedBoostT = SPEED_BOOST_TIME
+            s.player.invincibleT = INVINCIBLE_TIME
+            spawnBurst(s.particles, m.x, m.y, '#ffd166', 16)
+            triggerShake(s.shake, 0.2)
+            spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'SUGAR RUSH!', '#ffd166', 17)
+          }
+        } else {
+          m.respawnT -= dt
+          if (m.respawnT <= 0) m.available = true
+        }
+      }
 
       // Pick up enemy flag
       if (!s.enemyFlag.taken && !s.player.carrying && dist(s.player, s.enemyFlag) < PLAYER_R + 14) {
@@ -262,7 +312,13 @@ export default function CaptureTheFlagGame() {
         }
 
         // Tag check: defender tags player when on the right side (their turf)
-        if (s.player.x > W / 2 - 40 && dist(d, s.player) < TAG_R && s.player.tagFlashT <= 0 && d.stunT <= 0) {
+        if (
+          s.player.x > W / 2 - 40 &&
+          dist(d, s.player) < TAG_R &&
+          s.player.tagFlashT <= 0 &&
+          s.player.invincibleT <= 0 &&
+          d.stunT <= 0
+        ) {
           spawnBurst(s.particles, s.player.x, s.player.y, '#ff7a3d', 16)
           triggerShake(s.shake, 0.45)
           spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, s.player.carrying ? 'TAGGED! FLAG DROPPED' : 'TAGGED!', '#ff7a3d', 16)
@@ -326,6 +382,8 @@ export default function CaptureTheFlagGame() {
         hudAccum.current = 0
         setTimeLeft(Math.ceil(s.timeLeft))
         setRaidAlert(s.defenders.some((d) => d.raiding && d.stunT <= 0))
+        setBoosted(s.player.speedBoostT > 0)
+        setInvincible(s.player.invincibleT > 0)
       }
     }
 
@@ -357,6 +415,9 @@ export default function CaptureTheFlagGame() {
     // your flag — guard it from raiders
     if (!s.myFlag.taken) drawEmoji(ctx, '🚩', s.myFlag.x, s.myFlag.y, 34)
 
+    // marshmallow power-ups
+    for (const m of s.marshmallows) if (m.available) drawEmoji(ctx, '🍡', m.x, m.y, 26)
+
     // enemy flag
     if (!s.enemyFlag.taken) drawEmoji(ctx, '🚩', s.enemyFlag.x, s.enemyFlag.y, 34)
 
@@ -371,6 +432,23 @@ export default function CaptureTheFlagGame() {
     }
 
     // player
+    if (s.player.invincibleT > 0) {
+      ctx.save()
+      ctx.strokeStyle = 'rgba(255,209,102,0.8)'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(s.player.x, s.player.y, 22, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    } else if (s.player.speedBoostT > 0) {
+      ctx.save()
+      ctx.strokeStyle = 'rgba(125,211,252,0.5)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(s.player.x, s.player.y, 20, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    }
     ctx.save()
     if (s.player.tagFlashT > 0) ctx.globalAlpha = 0.5
     drawEmoji(ctx, s.player.carrying ? '🏃‍♂️🚩' : '🏃‍♂️', s.player.x, s.player.y, 30)
@@ -385,7 +463,11 @@ export default function CaptureTheFlagGame() {
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
         <HUD
-          left={[carrying ? '🚩 Carrying the flag!' : '🎯 Grab the enemy flag', raidAlert ? '🚨 Your flag is under attack!' : null].filter(Boolean)}
+          left={[
+            carrying ? '🚩 Carrying the flag!' : '🎯 Grab the enemy flag',
+            raidAlert ? '🚨 Your flag is under attack!' : null,
+            invincible ? '✨ Invincible!' : boosted ? '⚡ Fast!' : null,
+          ].filter(Boolean)}
           right={[`⏱ ${timeLeft}s`]}
         />
         <VirtualJoystick dirRef={joyRef} />
@@ -393,7 +475,7 @@ export default function CaptureTheFlagGame() {
           show={phase === 'ready'}
           emoji="🚩"
           title="Capture the Flag"
-          subtitle="Grab the enemy flag and race it back home! Use the trees for cover — defenders can't see you through them. Your teammates guard your own flag, but raiders can still sneak in."
+          subtitle="Grab the enemy flag and race it back home! Use the trees for cover — defenders can't see you through them, and the enemy woods are thick with them. Grab a 🍡 marshmallow for a 2s speed burst plus 1s of invincibility. You've got one teammate guarding your flag, but raiders can still sneak in."
           buttonLabel="Start"
           onAction={start}
         >

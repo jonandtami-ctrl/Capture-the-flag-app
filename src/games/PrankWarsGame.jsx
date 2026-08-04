@@ -29,13 +29,23 @@ const TARGET = { x: W - 90, y: H / 2 }
 const PLAYER_SPEED = 200
 const ROUND_SECONDS = 45
 const CATCH_R = 46
+const PROP_R = 26
 const TOTAL_DIST = dist(START, TARGET)
+
+// Grab one of these on the way in — you can't pull the prank empty-handed.
+const PROPS = [
+  { x: 260, y: 160, type: 'bucket', emoji: '🪣', label: 'water bucket' },
+  { x: 260, y: 340, type: 'cushion', emoji: '💨', label: 'whoopee cushion' },
+]
 
 function freshState(mult) {
   return {
     mult,
     player: { x: START.x, y: START.y },
     counselor: { watching: false, warn: false, t: rand(1.3, 2.2) / mult.speed },
+    props: PROPS.map((p) => ({ ...p, available: true })),
+    carryingProp: null,
+    hintCd: 0,
     particles: [],
     floatingText: [],
     shake: { trauma: 0 },
@@ -110,15 +120,42 @@ export default function PrankWarsGame() {
         s.player.x = START.x
         s.player.y = START.y
         s.caughtFlash = 0.8
+        // Getting caught costs you your prop too, not just your position.
+        if (s.carryingProp) {
+          const dropped = s.props.find((p) => p.type === s.carryingProp.type)
+          if (dropped) dropped.available = true
+          s.carryingProp = null
+        }
       } else {
         s.player.x = clamp(s.player.x + dx * PLAYER_SPEED * dt, 20, W - 20)
         s.player.y = clamp(s.player.y + dy * PLAYER_SPEED * dt, 20, H - 20)
       }
 
+      // Grab a prop — you can't prank the counselor empty-handed
+      if (!s.carryingProp) {
+        for (const p of s.props) {
+          if (p.available && dist(s.player, p) < PROP_R) {
+            p.available = false
+            s.carryingProp = p
+            spawnBurst(s.particles, s.player.x, s.player.y, '#7dd3fc', 12)
+            spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, `GOT THE ${p.label.toUpperCase()}!`, '#7dd3fc', 15)
+            break
+          }
+        }
+      }
+
       if (dist(s.player, TARGET) < CATCH_R) {
-        setPhase('won')
-        const result = recordWin()
-        if (result.rankedUp) setRankUp(result.newRank)
+        if (s.carryingProp) {
+          setPhase('won')
+          const result = recordWin()
+          if (result.rankedUp) setRankUp(result.newRank)
+        } else {
+          s.hintCd -= dt
+          if (s.hintCd <= 0) {
+            spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'GRAB A PROP FIRST!', '#ffd166', 15)
+            s.hintCd = 2
+          }
+        }
       }
 
       hudAccum.current += dt
@@ -138,6 +175,8 @@ export default function PrankWarsGame() {
     ctx.globalAlpha = 0.35
     ;[[50, 50], [750, 440], [80, 440], [720, 60]].forEach(([x, y]) => drawEmoji(ctx, '🌲', x, y, 30))
     ctx.globalAlpha = 1
+
+    for (const p of stateRef.current.props) if (p.available) drawEmoji(ctx, p.emoji, p.x, p.y, 28)
 
     const c = stateRef.current.counselor
     drawEmoji(ctx, c.watching ? '🧑‍🏫' : '🙈', TARGET.x, TARGET.y, 40)
@@ -159,6 +198,9 @@ export default function PrankWarsGame() {
     ctx.save()
     if (stateRef.current.caughtFlash > 0) ctx.globalAlpha = 0.4
     drawEmoji(ctx, '🧒', stateRef.current.player.x, stateRef.current.player.y, 30)
+    if (stateRef.current.carryingProp) {
+      drawEmoji(ctx, stateRef.current.carryingProp.emoji, stateRef.current.player.x + 16, stateRef.current.player.y - 16, 18)
+    }
     ctx.restore()
 
     updateAndDrawParticles(ctx, stateRef.current.particles, dt)
@@ -172,15 +214,18 @@ export default function PrankWarsGame() {
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
         <HUD
-          left={[stateRef.current.counselor?.watching ? '👀 Freeze!' : '✅ Clear to move', `📏 ${progressPct}% there`]}
-          right={[`⏱ ${timeLeft}s`]}
+          left={[
+            stateRef.current.counselor?.watching ? '👀 Freeze!' : '✅ Clear to move',
+            stateRef.current.carryingProp ? `${stateRef.current.carryingProp.emoji} Ready to prank!` : '🎒 Grab a prop first',
+          ]}
+          right={[`📏 ${progressPct}%`, `⏱ ${timeLeft}s`]}
         />
         <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}
           emoji="🪣"
           title="Prank Wars"
-          subtitle="Sneak up on the counselor without being spotted moving!"
+          subtitle="Grab a water bucket or whoopee cushion, then sneak up on the counselor without being spotted moving! Getting busted costs you your prop too, so it's back to the start empty-handed."
           buttonLabel="Start"
           onAction={start}
         >
@@ -190,7 +235,7 @@ export default function PrankWarsGame() {
           show={phase === 'won'}
           emoji="🎉"
           title="Prank landed!"
-          subtitle={`You pulled it off with ${timeLeft}s to spare.`}
+          subtitle={`The ${stateRef.current.carryingProp?.label ?? 'prank'} landed with ${timeLeft}s to spare.`}
           buttonLabel="Play again"
           onAction={start}
         >
@@ -205,7 +250,7 @@ export default function PrankWarsGame() {
           onAction={start}
         />
       </GameFrame>
-      <p className="mt-3 text-center text-xs text-forest-400/50">Move with WASD or arrow keys — freeze when they're watching</p>
+      <p className="mt-3 text-center text-xs text-forest-400/50">Move with WASD or arrow keys — freeze when they're watching · grab a prop before you prank</p>
     </div>
   )
 }
