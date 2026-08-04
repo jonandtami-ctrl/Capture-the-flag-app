@@ -41,9 +41,10 @@ const MARSHMALLOW_RESPAWN = 16
 const MARSHMALLOW_SPOTS = [
   { x: 260, y: 150 },
   { x: 260, y: 350 },
+  { x: 610, y: 400 }, // one on the enemy side too — fewer than your side
 ]
-const SPEED_BOOST_TIME = 2
-const INVINCIBLE_TIME = 1
+const SPEED_BOOST_TIME = 2.5
+const INVINCIBLE_TIME = 2.5
 const SPEED_BOOST_MULT = 1.6
 
 // Keep-clear circles around spawn points, flags, and home so the maze never
@@ -86,14 +87,15 @@ const TREES = (() => {
     }
   }
 
-  // Enemy side: tighter grid, lower skip rate — real thickets to hide in.
+  // Enemy side: still denser than yours, but thinned out with wider gaps
+  // so there's room to actually maneuver, not just hide.
   col = 0
-  for (let x = W / 2; x <= 690; x += 48) {
+  for (let x = W / 2; x <= 690; x += 58) {
     let row = 0
-    for (let y = 45; y <= 455; y += 48) {
+    for (let y = 45; y <= 455; y += 58) {
       col++
       row++
-      if ((col * 7 + row * 5) % 4 === 0) continue
+      if ((col * 7 + row * 5) % 3 === 0) continue
       tryAdd(x + (((col * 13) % 21) - 10), y + (((row * 19) % 21) - 10))
     }
   }
@@ -473,7 +475,7 @@ export default function CaptureTheFlagGame() {
           show={phase === 'ready'}
           emoji="🚩"
           title="Capture the Flag"
-          subtitle="Grab the enemy flag and race it back home! Use the trees for cover — defenders can't see you through them, and the enemy woods are thick with them. Grab a 🍡 marshmallow for a 2s speed burst plus 1s of invincibility. You've got one teammate guarding your flag, but raiders can still sneak in."
+          subtitle="Grab the enemy flag and race it back home! Use the trees for cover — defenders can't see you through them, and the enemy woods are thick with them. Grab a 🍡 marshmallow for a 2.5s speed burst plus 2.5s of invincibility (there's even one on the enemy side). You've got one teammate guarding your flag, but raiders can still sneak in."
           buttonLabel="Start"
           onAction={start}
         >
