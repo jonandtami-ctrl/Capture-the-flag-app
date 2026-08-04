@@ -325,6 +325,12 @@ export default function CaptureTheFlagGame() {
           triggerShake(s.shake, 0.45)
           spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, s.player.carrying ? 'TAGGED! FLAG DROPPED' : 'TAGGED!', '#ff7a3d', 16)
           s.player.tagFlashT = 1
+          // Drop the flag right where you got caught — it doesn't teleport
+          // back to its post, so you (or a defender) have to go get it.
+          if (s.player.carrying) {
+            s.enemyFlag.x = s.player.x
+            s.enemyFlag.y = s.player.y
+          }
           s.player.carrying = false
           s.enemyFlag.taken = false
           setCarrying(false)
@@ -338,8 +344,14 @@ export default function CaptureTheFlagGame() {
           if (caught) {
             spawnBurst(s.particles, d.x, d.y, '#67e8f9', 14)
             triggerShake(s.shake, 0.25)
-            spawnFloatingText(s.floatingText, d.x, d.y - 22, d.carrying ? 'FLAG RETURNED!' : 'SENT BACK!', '#7dd3fc', 15)
-            if (d.carrying) s.myFlag.taken = false
+            spawnFloatingText(s.floatingText, d.x, d.y - 22, d.carrying ? 'FLAG DROPPED!' : 'SENT BACK!', '#7dd3fc', 15)
+            if (d.carrying) {
+              // Same rule for your own flag — it drops right where the
+              // raider got caught instead of snapping back to its post.
+              s.myFlag.x = d.x
+              s.myFlag.y = d.y
+              s.myFlag.taken = false
+            }
             d.raiding = false
             d.carrying = false
             d.mode = 'patrol'
