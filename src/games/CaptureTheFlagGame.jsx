@@ -36,6 +36,78 @@ const TAG_R = PLAYER_R + AI_R
 const RAID_STUN = 2.2
 const MY_FLAG = { x: 150, y: H / 2 }
 const AI_SCORE_POINT = { x: W - 40, y: H / 2 }
+const TREE_R = 16
+
+// Keep-clear circles around spawn points, flags, and home so the maze never
+// seals off somewhere the game depends on being reachable.
+const RESERVED_ZONES = [
+  { x: 60, y: H / 2, r: 55 }, // home
+  { x: MY_FLAG.x, y: MY_FLAG.y, r: 55 }, // your flag
+  { x: 90, y: H / 2, r: 40 }, // player spawn
+  { x: W - 60, y: H / 2, r: 55 }, // enemy flag
+  { x: W - 40, y: H / 2, r: 45 }, // AI score point
+  { x: W - 180, y: H / 2 - 90, r: 45 },
+  { x: W - 180, y: H / 2 + 90, r: 45 },
+  { x: W - 260, y: H / 2, r: 45 },
+]
+
+// A deterministic scatter of trees across the arena — enough to break
+// sightlines and force weaving through real lanes, without packing so
+// tight it reads as a solid thicket. Fixed pattern (no Math.random) so the
+// layout is stable and never seals off a reserved zone or a way across.
+const TREES = (() => {
+  const trees = []
+  let col = 0
+  for (let x = 120; x <= 680; x += 65) {
+    let row = 0
+    for (let y = 50; y <= 450; y += 65) {
+      col++
+      row++
+      // Skip roughly a third of cells (fixed pattern) so real lanes survive.
+      if ((col * 5 + row * 3) % 3 === 0) continue
+      const jitterX = ((col * 17) % 27) - 13
+      const jitterY = ((row * 23) % 27) - 13
+      const tx = x + jitterX
+      const ty = y + jitterY
+      if (RESERVED_ZONES.some((z) => Math.hypot(tx - z.x, ty - z.y) < z.r)) continue
+      trees.push({ x: tx, y: ty, r: TREE_R })
+    }
+  }
+  return trees
+})()
+
+// Pushes an entity back out of any tree trunk it's overlapping — trees are
+// solid, so you weave around them rather than clipping straight through.
+function resolveTreeCollisions(entity, entityR) {
+  for (const t of TREES) {
+    const dx = entity.x - t.x
+    const dy = entity.y - t.y
+    const d = Math.hypot(dx, dy) || 0.001
+    const minDist = t.r + entityR
+    if (d < minDist) {
+      const push = minDist - d
+      entity.x += (dx / d) * push
+      entity.y += (dy / d) * push
+    }
+  }
+}
+
+// True if no tree trunk sits on the straight line between a and b — lets
+// defenders actually lose sight of you behind cover instead of seeing
+// through the forest.
+function hasLineOfSight(a, b) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len2 = dx * dx + dy * dy
+  for (const t of TREES) {
+    let along = len2 === 0 ? 0 : ((t.x - a.x) * dx + (t.y - a.y) * dy) / len2
+    along = clamp(along, 0, 1)
+    const px = a.x + dx * along
+    const py = a.y + dy * along
+    if (Math.hypot(t.x - px, t.y - py) < t.r + 5) return false
+  }
+  return true
+}
 
 function freshState(mult) {
   return {
@@ -106,6 +178,7 @@ export default function CaptureTheFlagGame() {
       const dy = kd.x !== 0 || kd.y !== 0 ? kd.y : joyRef.current.y
       s.player.x = clamp(s.player.x + dx * PLAYER_SPEED * dt, PLAYER_R, W - PLAYER_R)
       s.player.y = clamp(s.player.y + dy * PLAYER_SPEED * dt, PLAYER_R, H - PLAYER_R)
+      resolveTreeCollisions(s.player, PLAYER_R)
       if (s.player.tagFlashT > 0) s.player.tagFlashT -= dt
 
       // Pick up enemy flag
@@ -147,6 +220,7 @@ export default function CaptureTheFlagGame() {
           steer(d, target, AI_SPEED * s.mult.speed * 0.9)
           d.x = clamp(d.x + d.vx * dt, AI_R, W - AI_R)
           d.y = clamp(d.y + d.vy * dt, AI_R, H - AI_R)
+          resolveTreeCollisions(d, AI_R)
 
           if (!d.carrying && !s.myFlag.taken && dist(d, s.myFlag) < AI_R + 14) {
             d.carrying = true
@@ -159,7 +233,8 @@ export default function CaptureTheFlagGame() {
             setPhase('lost')
           }
         } else {
-          const seesPlayer = s.player.x > W / 2 - 20 && dist(d, s.player) < DEFENDER_SIGHT
+          const seesPlayer =
+            s.player.x > W / 2 - 20 && dist(d, s.player) < DEFENDER_SIGHT && hasLineOfSight(d, s.player)
           if (seesPlayer) {
             d.mode = 'chase'
           } else if (d.mode === 'chase' && dist(d, s.player) > 220) {
@@ -183,6 +258,7 @@ export default function CaptureTheFlagGame() {
           }
           d.x = clamp(d.x + d.vx * dt, W / 2 - 30, W - AI_R)
           d.y = clamp(d.y + d.vy * dt, AI_R, H - AI_R)
+          resolveTreeCollisions(d, AI_R)
         }
 
         // Tag check: defender tags player when on the right side (their turf)
@@ -242,6 +318,7 @@ export default function CaptureTheFlagGame() {
         }
         t.x = clamp(t.x + t.vx * dt, PLAYER_R, W / 2 - 20)
         t.y = clamp(t.y + t.vy * dt, AI_R, H - AI_R)
+        resolveTreeCollisions(t, PLAYER_R)
       }
 
       hudAccum.current += dt
@@ -269,10 +346,9 @@ export default function CaptureTheFlagGame() {
     ctx.stroke()
     ctx.setLineDash([])
 
-    // trees (decorative)
-    ctx.globalAlpha = 0.5
-    const trees = [[40, 40], [40, 460], [740, 60], [700, 440], [400, 30], [400, 470]]
-    for (const [tx, ty] of trees) drawEmoji(ctx, '🌲', tx, ty, 34)
+    // trees — real cover, not just scenery: they block movement and sightlines
+    ctx.globalAlpha = 0.65
+    for (const t of TREES) drawEmoji(ctx, '🌲', t.x, t.y, 30)
     ctx.globalAlpha = 1
 
     // home marker
@@ -317,7 +393,7 @@ export default function CaptureTheFlagGame() {
           show={phase === 'ready'}
           emoji="🚩"
           title="Capture the Flag"
-          subtitle="Grab the enemy flag and race it back home! Your teammates guard your own flag, but raiders can still sneak in — tag them if they cross to your side."
+          subtitle="Grab the enemy flag and race it back home! Use the trees for cover — defenders can't see you through them. Your teammates guard your own flag, but raiders can still sneak in."
           buttonLabel="Start"
           onAction={start}
         >
