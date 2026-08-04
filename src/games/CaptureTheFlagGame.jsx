@@ -4,6 +4,7 @@ import useKeyboard from './engine/useKeyboard.js'
 import useGameLoop from './engine/useGameLoop.js'
 import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
+import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
@@ -471,6 +472,7 @@ export default function CaptureTheFlagGame() {
           ].filter(Boolean)}
           right={[`⏱ ${timeLeft}s`]}
         />
+        <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}
           emoji="🚩"
