@@ -206,17 +206,17 @@ export const games = [
   {
     slug: 'diamond-smugglers',
     name: 'Diamond Smugglers',
-    tagline: 'A dance-floor social deduction game — smuggle the diamond, make the trade, and don\'t get caught by the police.',
+    tagline: 'A dance-floor social deduction game — pick up diamonds, dodge the police searchlights, and make the trade.',
     emoji: '💎',
     theme: 'ember',
     category: 'Social Deduction',
     players: '1 (vs. AI)',
-    duration: '45-sec rounds',
+    duration: '60-sec rounds',
     energy: 'Medium',
     howToPlay: {
-      objective: 'Cross the dance floor to reach the buyer and complete the trade.',
+      objective: 'Grab a diamond off the dance floor and deliver it to the buyer — land 5 deals before time runs out.',
       controls: 'WASD/arrows or joystick to move',
-      win: 'Reach the buyer without getting caught in the police searchlight — it sweeps back and forth, so time your crossing.',
+      win: 'Sneak each diamond past the sweeping police searchlights to the buyer. Get caught while carrying one and you drop it back onto the floor. More searchlights come online the more deals you land.',
     },
     equipment: [
       'A few small "diamond" tokens (fake gems, poker chips, or wrapped candy all work)',

@@ -21,6 +21,13 @@ export function steer(entity, target, speed, away = false) {
 
 export function drawEmoji(ctx, emoji, x, y, size = 32) {
   ctx.save()
+  // Color emoji glyphs ignore fillStyle's RGB, but some renderers still
+  // multiply in its alpha channel — so a low-alpha fillStyle left over from
+  // an earlier draw call (a faint tile, a translucent overlay) can make an
+  // otherwise-normal drawEmoji call render almost invisibly. Force it opaque
+  // here; an intentional fade should go through globalAlpha, which this
+  // leaves untouched.
+  ctx.fillStyle = '#ffffff'
   ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
