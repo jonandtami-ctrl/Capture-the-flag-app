@@ -14,7 +14,7 @@ export const games = [
     energy: 'High',
     howToPlay: {
       objective: 'Sneak past the AI defenders, grab the enemy flag, and race it back to your side before time runs out.',
-      controls: 'WASD or arrow keys to move · on-screen joystick on mobile',
+      controls: 'WASD or arrow keys to move',
       win: 'Get the flag across the center line onto your side. Get tagged and you drop the flag back at its post.',
     },
     equipment: ['2 flags (bandanas work)', 'Cones or rope/tape for boundaries', 'Jail markers'],
@@ -49,7 +49,7 @@ export const games = [
     energy: 'High',
     howToPlay: {
       objective: 'Dodge incoming water balloons while landing your own throws on the enemy flame.',
-      controls: 'WASD/arrows or joystick to dodge · click/tap anywhere to throw',
+      controls: 'WASD/arrows to dodge · click/tap anywhere to throw',
       win: 'Put out all 5 of the enemy\'s flames before yours goes out. Watch for the targeting reticle — stand in front of your flame to block a hit.',
     },
     equipment: [
@@ -130,7 +130,7 @@ export const games = [
     energy: 'High',
     howToPlay: {
       objective: 'Track down all 4 hidden bounties before time runs out — they bolt the moment they spot you.',
-      controls: 'WASD/arrows or joystick to move',
+      controls: 'WASD/arrows to move',
       win: 'Catch every bounty within 45 seconds. Get close enough to tag them, but they\'ll flee if you approach too directly.',
     },
     equipment: [
@@ -171,7 +171,7 @@ export const games = [
     energy: 'Medium',
     howToPlay: {
       objective: 'Sneak across the yard to prank the counselor without being spotted moving.',
-      controls: 'WASD/arrows or joystick to move',
+      controls: 'WASD/arrows to move',
       win: 'Reach the counselor while their back is turned. Freeze the instant you see the 👀 warning — moving while they\'re watching sends you back to start.',
     },
     equipment: [
@@ -214,7 +214,7 @@ export const games = [
     energy: 'Medium',
     howToPlay: {
       objective: 'Grab a diamond off the dance floor and deliver it to the buyer — land 5 deals before time runs out.',
-      controls: 'WASD/arrows or joystick to move',
+      controls: 'WASD/arrows to move',
       win: 'Sneak each diamond past the sweeping police searchlights to the buyer. Get caught while carrying one and you drop it back onto the floor. More searchlights come online the more deals you land.',
     },
     equipment: [
@@ -255,7 +255,7 @@ export const games = [
     energy: 'High',
     howToPlay: {
       objective: 'Defend the food stash from a growing wave of raccoons sneaking down from the treeline.',
-      controls: 'A/D or arrows (or joystick) to move · Space or tap/click to fire your slingshot straight up',
+      controls: 'A/D or arrows to move · Space or tap/click to fire your slingshot straight up',
       win: 'Survive the full 60 seconds with at least one life left. Raccoons speed up the longer you last.',
     },
     equipment: [

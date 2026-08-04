@@ -5,7 +5,6 @@ import useGameLoop from './engine/useGameLoop.js'
 import GameFrame from './engine/GameFrame.jsx'
 import HUD from './engine/HUD.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
-import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
 import useRank from '../lib/useRank.js'
@@ -203,7 +202,7 @@ export default function CaptureTheFlagGame() {
       if (s.player.speedBoostT > 0) s.player.speedBoostT -= dt
       if (s.player.invincibleT > 0) s.player.invincibleT -= dt
 
-      // Player movement: keyboard direction takes priority, else joystick
+      // Player movement (keyboard only — joystick removed, it covered the character)
       const kd = getDirection()
       const dx = kd.x !== 0 || kd.y !== 0 ? kd.x : joyRef.current.x
       const dy = kd.x !== 0 || kd.y !== 0 ? kd.y : joyRef.current.y
@@ -470,7 +469,6 @@ export default function CaptureTheFlagGame() {
           ].filter(Boolean)}
           right={[`⏱ ${timeLeft}s`]}
         />
-        <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}
           emoji="🚩"
@@ -504,8 +502,7 @@ export default function CaptureTheFlagGame() {
           onAction={start}
         />
       </GameFrame>
-      <p className="mt-3 text-center text-xs text-forest-400/50 sm:hidden">Use the joystick to move</p>
-      <p className="mt-3 hidden text-center text-xs text-forest-400/50 sm:block">Move with WASD or arrow keys</p>
+      <p className="mt-3 text-center text-xs text-forest-400/50">Move with WASD or arrow keys</p>
     </div>
   )
 }
