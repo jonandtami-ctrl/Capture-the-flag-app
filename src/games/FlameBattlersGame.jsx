@@ -28,23 +28,40 @@ const CENTER = { x: W / 2, y: H / 2 }
 const RADIUS = 280
 const SPEED = 220
 const ATTACKER_SPEED = 150
-const ROUND_SECONDS = 90
-const START_HEALTH = 7
-const FLAME_STACK_GAP = 24
+const ROUND_SECONDS = 120
+const START_HEALTH = 16
 const TELEGRAPH_TIME = 0.55
-// Standing this close to your own flame reliably blocks incoming balloons —
-// generous enough to cover the whole visible flame column (not a tiny spot
-// at its base), so guarding it feels like a real, learnable defense.
-const BLOCK_R = 46
+// Standing near your own flame blocks incoming balloons — wide and forgiving
+// on purpose, so guarding it feels like an easy, learnable defense rather
+// than something you have to pixel-perfectly camp on top of.
+const BLOCK_R = 66
+// A thrown balloon counts as a hit anywhere in this radius of the flame —
+// generous, so landing "close enough" reads as a hit instead of a miss.
+const FLAME_HIT_R = 55
+// Click/tap within this radius of the enemy flame and the throw auto-snaps
+// dead-center onto it — no need to aim a precise crosshair, just throw in
+// the general direction and it lands.
+const AIM_ASSIST_R = 95
+const PICKUP_R = 32
+const PICKUP_RESPAWN = 3.5
 
-// The flame health stack is drawn as big 🔥 emoji rising above the flame's
-// anchor point (one per health, FLAME_STACK_GAP apart) — a throw should
-// register anywhere on that visible column, not just a small circle at its
-// base, or landing on the flame you can clearly see will still read as a miss.
-function hitsFlameStack(px, py, flame) {
-  const dx = Math.abs(px - flame.x)
-  const dy = py - flame.y
-  return dx < 34 && dy > -(FLAME_STACK_GAP * (START_HEALTH - 1) + 34) && dy < 34
+// Balloon pickup spots, defined once as (dx,dy) offsets from the arena
+// center and then mirrored onto both sides — keeps the two halves visually
+// and mechanically symmetric.
+const PICKUP_OFFSETS = [
+  { dx: 200, dy: -110 },
+  { dx: 130, dy: 130 },
+  { dx: 190, dy: 90 },
+  { dx: 90, dy: -170 },
+]
+
+function makePickups() {
+  const pickups = []
+  for (const off of PICKUP_OFFSETS) {
+    pickups.push({ x: CENTER.x - off.dx, y: CENTER.y + off.dy, side: 'left', available: true, respawnT: 0 })
+    pickups.push({ x: CENTER.x + off.dx, y: CENTER.y + off.dy, side: 'right', available: true, respawnT: 0 })
+  }
+  return pickups
 }
 
 // Keeps an entity inside the circular arena AND on its own side of the
@@ -76,42 +93,120 @@ function freshAttacker(side, wanderRange, throwRange, mult) {
     wanderT: rand(...wanderRange),
     throwCd: rand(...throwRange) / mult.speed,
     throwRange,
+    carrying: false,
   }
 }
 
+function wanderTarget(side) {
+  const angle = rand(0, Math.PI * 2)
+  const r = rand(0, RADIUS - 50)
+  const baseX = side === 'right' ? CENTER.x + RADIUS - 90 : CENTER.x - RADIUS + 90
+  return clampToArenaHalf(baseX + Math.cos(angle) * r * 0.4, CENTER.y + Math.sin(angle) * r, side)
+}
+
 // Wanders an AI-controlled attacker (enemy or teammate) around its half of
-// the arena and returns a new telegraph reticle whenever its throw cooldown
-// fires — shared by the enemy pair and your teammate so all three behave
-// consistently. Each attacker keeps its own throwRange (set at spawn) for
-// every reset, not just its first throw, so a deliberately slow teammate
-// doesn't speed up to enemy pace after her opening shot.
-function updateAttacker(attacker, side, targetFlame, dt, mult) {
+// the arena. Unarmed, it heads for the nearest available balloon pickup on
+// its own side; once carrying, it mills around briefly and throws when its
+// cooldown fires, returning a fresh telegraph reticle. Shared by the enemy
+// pair and your teammate so all three behave consistently. Each attacker
+// keeps its own throwRange (set at spawn) for every reset, not just its
+// first throw, so a deliberately slow teammate doesn't speed up to enemy
+// pace after her opening shot.
+function updateAttacker(attacker, side, targetFlame, dt, mult, pickups) {
   const speed = ATTACKER_SPEED * mult.speed
+
+  if (!attacker.carrying) {
+    let nearest = null
+    let nearestD = Infinity
+    for (const p of pickups) {
+      if (p.side !== side || !p.available) continue
+      const d = dist(attacker, p)
+      if (d < nearestD) {
+        nearestD = d
+        nearest = p
+      }
+    }
+    if (nearest) {
+      const toTarget = Math.atan2(nearest.y - attacker.y, nearest.x - attacker.x)
+      const moved = clampToArenaHalf(attacker.x + Math.cos(toTarget) * speed * dt, attacker.y + Math.sin(toTarget) * speed * dt, side)
+      attacker.x = moved.x
+      attacker.y = moved.y
+      if (nearestD < PICKUP_R) {
+        nearest.available = false
+        nearest.respawnT = PICKUP_RESPAWN
+        attacker.carrying = true
+        attacker.throwCd = rand(...attacker.throwRange) / mult.speed
+      }
+    } else {
+      // no balloons free on this side right now — wander while waiting
+      attacker.wanderT -= dt
+      if (attacker.wanderT <= 0 || dist(attacker, attacker.target) < 12) {
+        attacker.target = wanderTarget(side)
+        attacker.wanderT = rand(0.6, 1.2)
+      }
+      const toTarget = Math.atan2(attacker.target.y - attacker.y, attacker.target.x - attacker.x)
+      const moved = clampToArenaHalf(attacker.x + Math.cos(toTarget) * speed * dt, attacker.y + Math.sin(toTarget) * speed * dt, side)
+      attacker.x = moved.x
+      attacker.y = moved.y
+    }
+    return null
+  }
+
+  // carrying a balloon — mill around briefly, then throw when ready
   attacker.wanderT -= dt
   if (attacker.wanderT <= 0 || dist(attacker, attacker.target) < 12) {
-    const angle = rand(0, Math.PI * 2)
-    const r = rand(0, RADIUS - 50)
-    const baseX = side === 'right' ? CENTER.x + RADIUS - 90 : CENTER.x - RADIUS + 90
-    attacker.target = clampToArenaHalf(baseX + Math.cos(angle) * r * 0.4, CENTER.y + Math.sin(angle) * r, side)
-    attacker.wanderT = rand(0.8, 1.8)
+    attacker.target = wanderTarget(side)
+    attacker.wanderT = rand(0.5, 1)
   }
   const toTarget = Math.atan2(attacker.target.y - attacker.y, attacker.target.x - attacker.x)
-  const moved = clampToArenaHalf(attacker.x + Math.cos(toTarget) * speed * dt, attacker.y + Math.sin(toTarget) * speed * dt, side)
+  const moved = clampToArenaHalf(attacker.x + Math.cos(toTarget) * speed * 0.6 * dt, attacker.y + Math.sin(toTarget) * speed * 0.6 * dt, side)
   attacker.x = moved.x
   attacker.y = moved.y
 
   attacker.throwCd -= dt
   if (attacker.throwCd <= 0) {
-    attacker.throwCd = rand(...attacker.throwRange) / mult.speed
+    attacker.carrying = false
     return { x: targetFlame.x + rand(-18, 18), y: targetFlame.y + rand(-18, 18) }
   }
   return null
 }
 
+function roundedFillStroke(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r)
+  else ctx.rect(x, y, w, h)
+}
+
+function drawFlameGauge(ctx, x, y, health, maxHealth, barColor) {
+  const frac = clamp(health / maxHealth, 0, 1)
+  const w = 100
+  const h = 14
+  const bx = x - w / 2
+  ctx.save()
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'
+  roundedFillStroke(ctx, bx, y, w, h, 7)
+  ctx.fill()
+  if (frac > 0) {
+    ctx.fillStyle = barColor
+    roundedFillStroke(ctx, bx, y, w * frac, h, 7)
+    ctx.fill()
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)'
+  ctx.lineWidth = 1.5
+  roundedFillStroke(ctx, bx, y, w, h, 7)
+  ctx.stroke()
+  ctx.font = 'bold 11px system-ui, sans-serif'
+  ctx.fillStyle = '#fff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`${Math.max(0, health)}/${maxHealth}`, x, y + h / 2 + 0.5)
+  ctx.restore()
+}
+
 function freshState(mult) {
   return {
     mult,
-    player: { x: CENTER.x - RADIUS + 90, y: CENTER.y - 60 },
+    player: { x: CENTER.x - RADIUS + 90, y: CENTER.y - 60, carrying: false },
     // Your teammate throws slowly — she's backup, not a substitute for
     // actually playing. Your own throws (no cooldown, aimed by hand) are
     // what should carry the fight.
@@ -120,12 +215,15 @@ function freshState(mult) {
     ai2: freshAttacker('right', [0.7, 1.7], [0.9, 1.6], mult),
     playerFlame: { x: CENTER.x - RADIUS + 30, y: CENTER.y, health: START_HEALTH },
     aiFlame: { x: CENTER.x + RADIUS - 30, y: CENTER.y, health: START_HEALTH },
+    pickups: makePickups(),
     balloons: [], // {x,y,tx,ty,duration,team:'player'|'enemy'}
     telegraphs: [], // {x,y,t,team,origin}
     particles: [],
     floatingText: [],
     shake: { trauma: 0 },
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
+    pulseT: 0,
+    noBalloonHintCd: 0,
   }
 }
 
@@ -139,6 +237,7 @@ export default function FlameBattlersGame() {
 
   const [phase, setPhase] = useState('ready')
   const [hp, setHp] = useState({ player: START_HEALTH, ai: START_HEALTH })
+  const [carrying, setCarrying] = useState(false)
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
   const [rankUp, setRankUp] = useState(null)
   const hudAccum = useRef(0)
@@ -154,6 +253,7 @@ export default function FlameBattlersGame() {
     const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setHp({ player: START_HEALTH, ai: START_HEALTH })
+    setCarrying(false)
     setTimeLeft(stateRef.current.timeLeft)
     setPhase('playing')
   }
@@ -161,15 +261,30 @@ export default function FlameBattlersGame() {
   const throwAt = (logicalX, logicalY) => {
     const s = stateRef.current
     if (phase !== 'playing') return
+    if (!s.player.carrying) {
+      if (s.noBalloonHintCd <= 0) {
+        spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'Grab a balloon first!', '#ffb020', 14)
+        s.noBalloonHintCd = 1.2
+      }
+      return
+    }
+    let tx = logicalX
+    let ty = logicalY
+    if (dist({ x: tx, y: ty }, s.aiFlame) < AIM_ASSIST_R) {
+      tx = s.aiFlame.x
+      ty = s.aiFlame.y
+    }
     s.balloons.push({
       x: s.player.x,
       y: s.player.y,
-      tx: logicalX,
-      ty: logicalY,
+      tx,
+      ty,
       t: 0,
-      duration: dist(s.player, { x: logicalX, y: logicalY }) / 420,
+      duration: dist(s.player, { x: tx, y: ty }) / 420,
       team: 'player',
     })
+    s.player.carrying = false
+    setCarrying(false)
   }
 
   const handlePointer = (e) => {
@@ -188,6 +303,8 @@ export default function FlameBattlersGame() {
 
     if (phase === 'playing') {
       s.timeLeft -= dt
+      s.pulseT += dt
+      s.noBalloonHintCd = Math.max(0, s.noBalloonHintCd - dt)
       if (s.timeLeft <= 0) {
         s.timeLeft = 0
         if (s.playerFlame.health >= s.aiFlame.health) winGame()
@@ -202,12 +319,35 @@ export default function FlameBattlersGame() {
       s.player.x = nextPlayer.x
       s.player.y = nextPlayer.y
 
-      // AI pair + your teammate all wander their half and throw on cadence
-      const reticleAi = updateAttacker(s.ai, 'right', s.playerFlame, dt, s.mult)
+      // player auto-grabs any available balloon pickup they walk over
+      if (!s.player.carrying) {
+        for (const p of s.pickups) {
+          if (p.side === 'left' && p.available && dist(s.player, p) < PICKUP_R) {
+            p.available = false
+            p.respawnT = PICKUP_RESPAWN
+            s.player.carrying = true
+            setCarrying(true)
+            spawnBurst(s.particles, p.x, p.y, '#7dd3fc', 8)
+            spawnFloatingText(s.floatingText, s.player.x, s.player.y - 26, 'Balloon ready!', '#7dd3fc', 14)
+            break
+          }
+        }
+      }
+
+      // pickups respawn on a timer regardless of who grabbed them
+      for (const p of s.pickups) {
+        if (!p.available) {
+          p.respawnT -= dt
+          if (p.respawnT <= 0) p.available = true
+        }
+      }
+
+      // AI pair + your teammate all seek balloons and throw on cadence
+      const reticleAi = updateAttacker(s.ai, 'right', s.playerFlame, dt, s.mult, s.pickups)
       if (reticleAi) s.telegraphs.push({ ...reticleAi, t: TELEGRAPH_TIME, team: 'enemy', origin: s.ai })
-      const reticleAi2 = updateAttacker(s.ai2, 'right', s.playerFlame, dt, s.mult)
+      const reticleAi2 = updateAttacker(s.ai2, 'right', s.playerFlame, dt, s.mult, s.pickups)
       if (reticleAi2) s.telegraphs.push({ ...reticleAi2, t: TELEGRAPH_TIME, team: 'enemy', origin: s.ai2 })
-      const reticleTeam = updateAttacker(s.teammate, 'left', s.aiFlame, dt, s.mult)
+      const reticleTeam = updateAttacker(s.teammate, 'left', s.aiFlame, dt, s.mult, s.pickups)
       if (reticleTeam) s.telegraphs.push({ ...reticleTeam, t: TELEGRAPH_TIME, team: 'player', origin: s.teammate })
 
       // resolve telegraphs -> spawn balloons from whichever attacker threw them
@@ -249,7 +389,7 @@ export default function FlameBattlersGame() {
               triggerShake(s.shake, 0.3)
               setHp((h) => ({ ...h, player: s.playerFlame.health }))
             }
-          } else if (hitsFlameStack(b.tx, b.ty, s.aiFlame)) {
+          } else if (dist({ x: b.tx, y: b.ty }, s.aiFlame) < FLAME_HIT_R) {
             s.aiFlame.health = Math.max(0, s.aiFlame.health - 1)
             spawnBurst(s.particles, s.aiFlame.x, s.aiFlame.y, '#43cc86', 14)
             spawnFloatingText(s.floatingText, s.aiFlame.x, s.aiFlame.y - 30, 'HIT! -1 🔥', '#43cc86', 18)
@@ -321,11 +461,21 @@ export default function FlameBattlersGame() {
     ctx.setLineDash([])
     ctx.restore()
 
-    // flame stacks (health as flame emoji count) — big and unmissable
+    // flames — a single big flame plus a health bar, so a large max-health
+    // reads clearly instead of stacking dozens of emoji off the top of the arena
     drawEmoji(ctx, '🪵', s.playerFlame.x, s.playerFlame.y + 36, 30)
-    for (let i = 0; i < s.playerFlame.health; i++) drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - i * FLAME_STACK_GAP, 52)
+    drawEmoji(ctx, '🔥', s.playerFlame.x, s.playerFlame.y - 6, 64)
+    drawFlameGauge(ctx, s.playerFlame.x, s.playerFlame.y - 78, s.playerFlame.health, START_HEALTH, '#ff7a3d')
     drawEmoji(ctx, '🪵', s.aiFlame.x, s.aiFlame.y + 36, 30)
-    for (let i = 0; i < s.aiFlame.health; i++) drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - i * FLAME_STACK_GAP, 52)
+    drawEmoji(ctx, '🔥', s.aiFlame.x, s.aiFlame.y - 6, 64)
+    drawFlameGauge(ctx, s.aiFlame.x, s.aiFlame.y - 78, s.aiFlame.health, START_HEALTH, '#43cc86')
+
+    // balloon pickups scattered around the field
+    for (const p of s.pickups) {
+      if (!p.available) continue
+      const bob = Math.sin(s.pulseT * 3 + p.x) * 3
+      drawEmoji(ctx, '🎈', p.x, p.y + bob, 30)
+    }
 
     // telegraph reticles
     for (const tg of s.telegraphs) {
@@ -338,14 +488,18 @@ export default function FlameBattlersGame() {
       ctx.restore()
     }
 
-    // balloons
+    // thrown balloons
     for (const b of s.balloons) drawEmoji(ctx, '💧', b.cx ?? b.x, b.cy ?? b.y, 20)
 
-    // characters
+    // characters (with a small balloon badge over whoever's currently armed)
     drawEmoji(ctx, '🧍', s.ai.x, s.ai.y, 30)
+    if (s.ai.carrying) drawEmoji(ctx, '🎈', s.ai.x, s.ai.y - 26, 16)
     drawEmoji(ctx, '🧍‍♀️', s.ai2.x, s.ai2.y, 30)
+    if (s.ai2.carrying) drawEmoji(ctx, '🎈', s.ai2.x, s.ai2.y - 26, 16)
     drawEmoji(ctx, '👩‍🚒', s.teammate.x, s.teammate.y, 30)
+    if (s.teammate.carrying) drawEmoji(ctx, '🎈', s.teammate.x, s.teammate.y - 26, 16)
     drawEmoji(ctx, '🧑‍🚒', s.player.x, s.player.y, 30)
+    if (s.player.carrying) drawEmoji(ctx, '🎈', s.player.x, s.player.y - 30, 18)
 
     updateAndDrawParticles(ctx, s.particles, dt)
     updateAndDrawFloatingText(ctx, s.floatingText, dt)
@@ -356,22 +510,22 @@ export default function FlameBattlersGame() {
     <div>
       <GameFrame containerRef={containerRef} canvasRef={canvasRef}>
         <div
-          className="absolute inset-0 z-10 cursor-crosshair"
+          className="absolute inset-0 z-10 cursor-pointer"
           onPointerDown={(e) => {
             if (e.pointerType === 'mouse') handlePointer(e)
           }}
           onClick={handlePointer}
         />
         <HUD
-          left={[`🔥 You: ${hp.player}`]}
-          right={[`🔥 AI: ${hp.ai}`, `⏱ ${timeLeft}s`]}
+          left={[`🔥 You: ${hp.player}/${START_HEALTH}`, carrying ? '🎈 Ready to throw!' : '🚶 Grab a balloon']}
+          right={[`🔥 AI: ${hp.ai}/${START_HEALTH}`, `⏱ ${timeLeft}s`]}
         />
         <VirtualJoystick dirRef={joyRef} />
         <GameOverlay
           show={phase === 'ready'}
           emoji="🔥"
           title="Flame Battlers"
-          subtitle="You and your teammate face off against two enemy throwers. Douse their flame before yours burns out — stand inside the dashed ring around your own flame to block incoming balloons!"
+          subtitle="You and your teammate face off against two enemy throwers. Balloons are scattered around the field — walk over one to grab it, then tap/click near their flame to throw. Stand near your own flame to block incoming balloons. Their flame can take a beating, so keep collecting and throwing!"
           buttonLabel="Start"
           onAction={start}
         >
@@ -396,7 +550,7 @@ export default function FlameBattlersGame() {
           onAction={start}
         />
       </GameFrame>
-      <p className="mt-3 text-center text-xs text-forest-400/50">Move to dodge · tap/click to throw a balloon · guard the dashed ring around your flame to block</p>
+      <p className="mt-3 text-center text-xs text-forest-400/50">Move to dodge · grab a 🎈 balloon off the ground · tap/click near their flame to throw · guard your flame to block</p>
     </div>
   )
 }
