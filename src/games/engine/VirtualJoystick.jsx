@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // On-screen thumbstick for touch devices. Writes directly into `dirRef`
 // (a {x,y} object) rather than React state so the game loop can read it
@@ -12,6 +12,17 @@ export default function VirtualJoystick({ dirRef }) {
   const knobRef = useRef(null)
   const activeTouch = useRef(null)
   const [active, setActive] = useState(false)
+  // A screen-width breakpoint alone misses touch tablets — an iPad's
+  // viewport is wider than most phone breakpoints even though it has no
+  // keyboard, so it needs the joystick just as much. Detect touch as the
+  // primary input instead: true for phones/tablets, false for a mouse or
+  // trackpad regardless of window size.
+  const [isTouch, setIsTouch] = useState(false)
+  useEffect(() => {
+    setIsTouch(window.matchMedia('(pointer: coarse)').matches)
+  }, [])
+
+  if (!isTouch) return null
 
   const setKnob = (dx, dy) => {
     if (knobRef.current) knobRef.current.style.transform = `translate(${dx}px, ${dy}px)`
@@ -45,7 +56,7 @@ export default function VirtualJoystick({ dirRef }) {
   return (
     <div
       ref={baseRef}
-      className={`absolute bottom-5 left-5 z-10 flex h-20 w-20 touch-none select-none items-center justify-center rounded-full border transition-opacity duration-150 sm:hidden ${
+      className={`absolute bottom-5 left-5 z-10 flex h-20 w-20 touch-none select-none items-center justify-center rounded-full border transition-opacity duration-150 ${
         active ? 'border-white/25 bg-white/10 opacity-100' : 'border-white/10 bg-white/5 opacity-35'
       }`}
       onPointerDown={(e) => {
