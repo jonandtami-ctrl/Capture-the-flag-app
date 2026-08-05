@@ -8,7 +8,9 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
+import PersonalBest from './engine/PersonalBest.jsx'
 import useRank from '../lib/useRank.js'
+import useRecords from '../lib/useRecords.js'
 import {
   clamp,
   dist,
@@ -95,6 +97,7 @@ export default function DiamondSmugglersGame() {
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
   const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
+  const { best, submit } = useRecords('diamond-smugglers', true)
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready')
@@ -102,10 +105,12 @@ export default function DiamondSmugglersGame() {
   const [delivered, setDelivered] = useState(0)
   const [carrying, setCarrying] = useState(false)
   const [rankUp, setRankUp] = useState(null)
+  const [isNewRecord, setIsNewRecord] = useState(false)
   const hudAccum = useRef(0)
 
   const start = () => {
     setRankUp(null)
+    setIsNewRecord(false)
     const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setTimeLeft(stateRef.current.timeLeft)
@@ -204,6 +209,7 @@ export default function DiamondSmugglersGame() {
           setPhase('won')
           const result = recordWin()
           if (result.rankedUp) setRankUp(result.newRank)
+          setIsNewRecord(submit(Math.ceil(s.timeLeft)))
         } else {
           s.diamond = spawnDiamond()
           if (activeCount(s.delivered) > activeCount(s.delivered - 1)) {
@@ -287,6 +293,7 @@ export default function DiamondSmugglersGame() {
           onAction={start}
         >
           <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
+          <PersonalBest value={best} format={(v) => `${v}s to spare`} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -297,6 +304,7 @@ export default function DiamondSmugglersGame() {
           onAction={start}
         >
           <RankUpBanner rank={rankUp} />
+          <PersonalBest value={best} format={(v) => `${v}s to spare`} isNew={isNewRecord} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}

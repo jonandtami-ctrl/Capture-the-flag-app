@@ -8,7 +8,9 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
+import PersonalBest from './engine/PersonalBest.jsx'
 import useRank from '../lib/useRank.js'
+import useRecords from '../lib/useRecords.js'
 import {
   clamp,
   dist,
@@ -165,6 +167,7 @@ export default function CaptureTheFlagGame() {
   const { getDirection } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
   const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
+  const { best, submit } = useRecords('capture-the-flag', true)
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
 
   const [phase, setPhase] = useState('ready') // ready | playing | won | lost
@@ -175,10 +178,12 @@ export default function CaptureTheFlagGame() {
   const [raidAlert, setRaidAlert] = useState(false)
   const [boosted, setBoosted] = useState(false)
   const [invincible, setInvincible] = useState(false)
+  const [isNewRecord, setIsNewRecord] = useState(false)
   const hudAccum = useRef(0)
 
   const start = () => {
     setRankUp(null)
+    setIsNewRecord(false)
     setLossReason('timeout')
     setRaidAlert(false)
     setBoosted(false)
@@ -247,6 +252,7 @@ export default function CaptureTheFlagGame() {
         setPhase('won')
         const result = recordWin()
         if (result.rankedUp) setRankUp(result.newRank)
+        setIsNewRecord(submit(Math.ceil(s.timeLeft)))
       }
 
       // Occasionally send one defender across to raid your flag
@@ -494,6 +500,7 @@ export default function CaptureTheFlagGame() {
           onAction={start}
         >
           <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
+          <PersonalBest value={best} format={(v) => `${v}s to spare`} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -504,6 +511,7 @@ export default function CaptureTheFlagGame() {
           onAction={start}
         >
           <RankUpBanner rank={rankUp} />
+          <PersonalBest value={best} format={(v) => `${v}s to spare`} isNew={isNewRecord} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}

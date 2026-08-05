@@ -8,7 +8,9 @@ import VirtualJoystick from './engine/VirtualJoystick.jsx'
 import GameOverlay from './engine/GameOverlay.jsx'
 import RankProgress from './engine/RankProgress.jsx'
 import RankUpBanner from './engine/RankUpBanner.jsx'
+import PersonalBest from './engine/PersonalBest.jsx'
 import useRank from '../lib/useRank.js'
+import useRecords from '../lib/useRecords.js'
 import {
   clamp,
   rand,
@@ -42,6 +44,7 @@ function freshState(mult) {
     elapsed: 0,
     combo: 0,
     lastHitAt: -99,
+    score: 0,
     timeLeft: Math.round(ROUND_SECONDS * mult.time),
   }
 }
@@ -52,6 +55,7 @@ export default function RaccoonRaidGame() {
   const { getDirection, actionRef } = useKeyboard()
   const joyRef = useRef({ x: 0, y: 0 })
   const { rank, nextRank, winsToNext, recordWin, allRanks, unlockedRanks, selectedRank, selectRank } = useRank()
+  const { best, submit } = useRecords('raccoon-raid', true)
   const stateRef = useRef(freshState({ speed: 1, time: 1 }))
   const firedRef = useRef(false)
 
@@ -60,10 +64,12 @@ export default function RaccoonRaidGame() {
   const [score, setScore] = useState(0)
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS)
   const [rankUp, setRankUp] = useState(null)
+  const [isNewRecord, setIsNewRecord] = useState(false)
   const hudAccum = useRef(0)
 
   const start = () => {
     setRankUp(null)
+    setIsNewRecord(false)
     const mult = { speed: selectedRank.speedMult, time: selectedRank.timeMult }
     stateRef.current = freshState(mult)
     setLives(START_LIVES)
@@ -91,6 +97,7 @@ export default function RaccoonRaidGame() {
         setPhase('won')
         const result = recordWin()
         if (result.rankedUp) setRankUp(result.newRank)
+        setIsNewRecord(submit(s.score))
       }
 
       // player horizontal movement
@@ -129,7 +136,10 @@ export default function RaccoonRaidGame() {
           s.combo = 0
           setLives((l) => {
             const next = Math.max(0, l - 1)
-            if (next === 0) setPhase('lost')
+            if (next === 0) {
+              setPhase('lost')
+              setIsNewRecord(submit(s.score))
+            }
             return next
           })
         }
@@ -148,6 +158,7 @@ export default function RaccoonRaidGame() {
             s.combo = s.elapsed - s.lastHitAt < COMBO_WINDOW ? s.combo + 1 : 1
             s.lastHitAt = s.elapsed
             const gain = s.combo > 1 ? s.combo : 1
+            s.score += gain
             setScore((sc) => sc + gain)
             triggerShake(s.shake, 0.15)
             spawnFloatingText(s.floatingText, r.x, r.y - 16, s.combo > 1 ? `COMBO x${s.combo}!` : '+1', '#43cc86', s.combo > 1 ? 18 : 15)
@@ -209,6 +220,7 @@ export default function RaccoonRaidGame() {
           onAction={start}
         >
           <RankProgress rank={rank} nextRank={nextRank} winsToNext={winsToNext} allRanks={allRanks} unlockedRanks={unlockedRanks} selectedRank={selectedRank} onSelect={selectRank} />
+          <PersonalBest value={best} format={(v) => `${v} raiders stopped`} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'won'}
@@ -219,6 +231,7 @@ export default function RaccoonRaidGame() {
           onAction={start}
         >
           <RankUpBanner rank={rankUp} />
+          <PersonalBest value={best} format={(v) => `${v} raiders stopped`} isNew={isNewRecord} />
         </GameOverlay>
         <GameOverlay
           show={phase === 'lost'}
@@ -227,7 +240,9 @@ export default function RaccoonRaidGame() {
           subtitle={`You stopped ${score} raiders before they overran the stash.`}
           buttonLabel="Try again"
           onAction={start}
-        />
+        >
+          <PersonalBest value={best} format={(v) => `${v} raiders stopped`} isNew={isNewRecord} />
+        </GameOverlay>
       </GameFrame>
       <p className="mt-3 text-center text-xs text-forest-400/50">Move with A/D or arrows · Space or tap to fire</p>
     </div>
